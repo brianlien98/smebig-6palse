@@ -12,7 +12,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import Papa from 'papaparse';
 
-// --- 元件介面定義 ---
+// --- Interface Definitions ---
 interface Task {
   id: number;
   pulse: string;
@@ -21,7 +21,7 @@ interface Task {
   status: 'pool' | 'approved' | 'active' | 'done';
 }
 
-// --- 六脈設定檔 ---
+// --- Pulse Configuration ---
 const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg: string, border: string, text: string }> = {
   'Traffic': { label: '流量脈', icon: Users, color: 'blue', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
   'Conversion': { label: '轉換脈', icon: MousePointerClick, color: 'green', bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700' },
@@ -69,7 +69,7 @@ export default function Dashboard() {
 
   const latest = data[data.length - 1] || {};
 
-  if (loading) return <div className="h-screen flex items-center justify-center text-blue-600 gap-2"><Loader2 className="animate-spin" /> 系統載入中...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center text-blue-600 gap-2"><Loader2 className="animate-spin" /> System Loading...</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
@@ -90,7 +90,7 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 space-y-8">
         
-        {/* === P1: 營運體檢 (圖表全開) === */}
+        {/* === P1: Operational Health Check === */}
         {activeTab === 'page1' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
             {/* 1. KPI Cards */}
@@ -121,7 +121,7 @@ export default function Dashboard() {
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
                           <XAxis dataKey="year_month" />
                           <YAxis />
-                          <Tooltip formatter={(val: number) => `$${val.toLocaleString()}`} />
+                          <Tooltip formatter={(val: any) => `$${Number(val).toLocaleString()}`} />
                           <Legend />
                           <Bar dataKey="old_customer_revenue" stackId="a" fill="#8b5cf6" name="舊客回購" />
                           <Bar dataKey="new_customer_revenue" stackId="a" fill="#22c55e" name="新客獲取" />
@@ -143,7 +143,7 @@ export default function Dashboard() {
                           <XAxis dataKey="year_month" />
                           <YAxis />
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <Tooltip formatter={(val: number) => `$${val.toLocaleString()}`} />
+                          <Tooltip formatter={(val: any) => `$${Number(val).toLocaleString()}`} />
                           <Area type="monotone" dataKey="total_revenue" stroke="#3b82f6" fillOpacity={1} fill="url(#colorTotal)" name="總營收" />
                         </AreaChart>
                       </ResponsiveContainer>
@@ -153,7 +153,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* === P2: 深度病理 (豐富圖表版) === */}
+        {/* === P2: Deep Pathology (Rich Charts) === */}
         {activeTab === 'page2' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             
@@ -197,7 +197,7 @@ export default function Dashboard() {
                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
                            <XAxis dataKey="year_month" />
                            <YAxis />
-                           <Tooltip formatter={(val: number) => `$${val}`} />
+                           <Tooltip formatter={(val: any) => `$${val}`} />
                            <Line type="monotone" dataKey="aov" stroke="#10b981" strokeWidth={3} name="平均客單價" />
                         </LineChart>
                       </ResponsiveContainer>
@@ -208,15 +208,15 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* === P3: 顧問藥方 (格式修正版) === */}
+        {/* === P3: Consultant Prescription (New Layout) === */}
         {activeTab === 'page3' && <ConsultantPrescriptionPage />}
 
-        {/* === P4: 數據規格 & 圖表說明 === */}
+        {/* === P4: Data Specs & Chart Guide === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                 {/* Raw Data Upload */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Upload className="text-blue-600"/> 資料上傳區 (Raw Data)(目前不可用)</h2>
+                    <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Upload className="text-blue-600"/> 資料上傳區 (Raw Data)</h2>
                     <DataUploader onUploadComplete={refreshData} />
                 </div>
 
@@ -265,7 +265,7 @@ export default function Dashboard() {
   );
 }
 
-// --- P3: 顧問藥方頁面 (格式依需求修正) ---
+// --- Consultant Prescription Page Component (New Layout) ---
 function ConsultantPrescriptionPage() {
     const [isAdmin, setIsAdmin] = useState(false);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -301,15 +301,15 @@ function ConsultantPrescriptionPage() {
                     <div className={`p-2 rounded-lg ${isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>{isAdmin ? <UserCog size={24}/> : <User size={24}/>}</div>
                     <div><h2 className="text-lg font-bold text-slate-800">SME 資深顧問藥方</h2><p className="text-sm text-slate-500">目前視角：{isAdmin ? '顧問後台 (挑選與編輯)' : '客戶前台 (執行改善)'}</p></div>
                 </div>
-                <button onClick={() => setIsAdmin(!isAdmin)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition">切換身分 (待開後台)</button>
+                <button onClick={() => setIsAdmin(!isAdmin)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition">切換身分 (Demo)</button>
             </div>
 
-            {/* === 顧問後台 (Admin View) === */}
+            {/* === Admin View === */}
             {isAdmin && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Left: Pool & Manual Add */}
                     <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 h-[700px] flex flex-col">
-                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-700 flex items-center gap-2"><Bot size={18}/> 建議池 ({poolTasks.length})</h3><button onClick={generateAiTasks} disabled={loading} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-500 flex items-center gap-1">{loading ? <Loader2 size={12} className="animate-spin"/> : <><Plus size={12}/> AI顧問建議(未串接，需token)</>}</button></div>
+                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-700 flex items-center gap-2"><Bot size={18}/> 建議池 ({poolTasks.length})</h3><button onClick={generateAiTasks} disabled={loading} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-500 flex items-center gap-1">{loading ? <Loader2 size={12} className="animate-spin"/> : <><Plus size={12}/> AI 生成</>}</button></div>
                         <div className="bg-white p-3 rounded shadow-sm border border-blue-200 mb-4">
                             <h4 className="text-xs font-bold text-blue-600 mb-2 flex items-center gap-1"><UserCog size={12}/> 手動新增</h4>
                             <div className="flex gap-2 mb-2">
@@ -351,11 +351,11 @@ function ConsultantPrescriptionPage() {
                 </div>
             )}
 
-            {/* === 客戶前台 (Client View - New Layout) === */}
+            {/* === Client View (New Layout) === */}
             {!isAdmin && (
                 <div className="space-y-10">
                     
-                    {/* 1. 建議藥方 (Categorized Boxes) */}
+                    {/* 1. Prescriptions (Categorized Boxes) */}
                     <div>
                         <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Sparkles className="text-purple-600"/> 顧問建議藥方 (請點擊加入改善)</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -383,7 +383,7 @@ function ConsultantPrescriptionPage() {
                         </div>
                     </div>
 
-                    {/* 2. 本月執行中 (Active) */}
+                    {/* 2. Active Tasks */}
                     <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
                         <div className="flex items-center gap-3 mb-6"><div className="bg-blue-600 text-white p-2 rounded-lg"><Flame size={20}/></div><div><h3 className="text-lg font-bold text-slate-800">本月重點改善任務</h3><p className="text-sm text-slate-500">請專注執行以下項目，完成後勾選。</p></div></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -397,7 +397,7 @@ function ConsultantPrescriptionPage() {
                         </div>
                     </div>
 
-                    {/* 3. 歷史紀錄 (History - at Bottom) */}
+                    {/* 3. History (at Bottom) */}
                     <div className="opacity-70 grayscale hover:grayscale-0 transition duration-500">
                         <div className="flex items-center gap-2 mb-4 border-b border-slate-200 pb-2"><CheckCircle size={18} className="text-slate-400"/><h3 className="font-bold text-slate-500">歷史完成紀錄 ({doneTasks.length})</h3></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -410,7 +410,7 @@ function ConsultantPrescriptionPage() {
     );
 }
 
-// 子元件 (保持不變)
+// --- Sub-components (Unchanged) ---
 function TabButton({ id, label, icon, active, onClick, isNew }: any) { return <button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-all ${active ? 'border-blue-600 text-blue-600 font-bold bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-blue-600'}`}>{icon} {label} {isNew && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">New</span>}</button>; }
 function KpiCard({ title, value, color }: any) { return <div className={`bg-white p-6 rounded-xl shadow-sm border-l-4 ${color}`}><p className="text-sm text-gray-500">{title}</p><h3 className="text-2xl font-bold mt-2">{value}</h3></div>; }
 function AiDiagnosisPanel({ page, dataSummary }: any) { const [d, setD] = useState(""); const [l, setL] = useState(false); const run = async () => { setL(true); const r = await fetch('/api/diagnose', { method: 'POST', body: JSON.stringify({ page, dataSummary }) }); const j = await r.json(); setD(j.diagnosis); setL(false); }; return <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl"><div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4"><div className="bg-slate-700 p-2 rounded-lg"><Bot className="text-blue-400" /></div><h3 className="text-lg font-bold">SME AI 六脈診斷(未串接，需token)</h3></div><div className="flex-1 space-y-4">{d ? <div className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed border border-white/10 animate-in fade-in"><p>{d}</p></div> : <div className="text-slate-400 text-sm text-center py-10">{l ? "分析中..." : "點擊按鈕啟動 AI 診斷"}</div>}</div><button onClick={run} disabled={l} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition flex justify-center items-center gap-2">{l?'分析中...':<><Sparkles size={16}/> 開始診斷</>}</button></div>; }
