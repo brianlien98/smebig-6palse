@@ -90,7 +90,7 @@ export default function Dashboard() {
         const avgAov = totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0;
         setKpiStats({ totalRevenue: totalRev, totalOrders: totalOrd, aov: avgAov });
 
-        // 2. Pulse Scores (New View)
+        // 2. Pulse Scores (From brand_pulse_scores View)
         const { data: scoresRaw } = await supabase.from('brand_pulse_scores').select('*').eq('client_name', clientName).single();
         if (scoresRaw) {
             setPulseScores([
@@ -111,7 +111,7 @@ export default function Dashboard() {
         const { data: chanRaw } = await supabase.from('channel_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false });
         setChannelData((chanRaw || []).map(c => ({ name: c.channel, value: c.total_revenue })));
 
-        // 5. RFM (Limit 1000)
+        // 5. RFM (Limit 1000 for visualization)
         const { data: rfmRaw } = await supabase.from('rfm_analysis').select('*').eq('client_name', clientName).limit(1000);
         setRfmData((rfmRaw || []).map((r: any) => ({ x: r.recency_days, y: r.frequency, z: r.monetary })));
 
@@ -188,6 +188,7 @@ export default function Dashboard() {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
             <div className="flex justify-between items-end">
                 <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運總覽</h2>
+                <span className="text-xs text-slate-400">數據來源: Supabase Views</span>
             </div>
             {loading ? <LoadingSkeleton /> : (
             <>
@@ -214,7 +215,13 @@ export default function Dashboard() {
                         </ResponsiveContainer>
                         </div>
                     </div>
-                    <AiDiagnosisPanel clientName={selectedClient} revenue={kpiStats.totalRevenue} />
+                    {/* ★★★ 這裡將完整的資料傳給 AiDiagnosisPanel ★★★ */}
+                    <AiDiagnosisPanel 
+                        clientName={selectedClient} 
+                        revenue={kpiStats.totalRevenue} 
+                        scores={pulseScores} 
+                        topProducts={productData}
+                    />
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -262,7 +269,7 @@ export default function Dashboard() {
         {/* === Page 3: Consultant Prescription === */}
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} />}
 
-        {/* === Page 5: Data Specs (New) === */}
+        {/* === Page 5: Data Specs === */}
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
@@ -312,6 +319,83 @@ export default function Dashboard() {
 }
 
 // --- Sub-Components ---
+
+// ★★★ 核心修改：AI Diagnosis Panel 連接真實 API ★★★
+function AiDiagnosisPanel({ clientName, revenue, scores, topProducts }: any) { 
+    const [d, setD] = useState(""); 
+    const [l, setL] = useState(false); 
+    
+    const run = async () => { 
+        if (!clientName) return;
+        setL(true); 
+        try {
+            // 轉換分數格式以符合 API 要求
+            // scores 格式為 [{subject:'流量', A:3}, ...] 需轉為 { traffic: 3, ... }
+            const scoreMap = scores.reduce((acc:any, curr:any) => {
+                const keyMap: any = { 
+                    '流量': 'traffic', '轉換': 'conversion', '獲利': 'profit', 
+                    '主顧': 'vip', '回購': 'retention', '口碑': 'reputation' 
+                };
+                // 簡單判斷：取前兩個字元 (例如 "流量脈" -> "流量")
+                const key = keyMap[curr.subject.substring(0, 2)];
+                if(key) acc[key] = curr.A;
+                return acc;
+            }, {});
+
+            const top3 = topProducts?.slice(0, 3).map((p:any) => p.name) || [];
+
+            const res = await fetch('/api/diagnose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    clientName, 
+                    revenue, 
+                    scores: scoreMap,
+                    topProducts: top3
+                })
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                setD(data.diagnosis);
+            } else {
+                setD("AI 連線失敗，請檢查網路或 API Key。");
+            }
+        } catch (e) {
+            console.error(e);
+            setD("連線錯誤，無法取得 AI 診斷。");
+        }
+        setL(false); 
+    }; 
+    
+    return (
+        <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl">
+            <div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4">
+                <Bot className="text-blue-400" />
+                <h3 className="text-lg font-bold">AI 六脈診斷</h3>
+            </div>
+            <div className="flex-1 space-y-4">
+                {d ? (
+                    <div className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed border border-white/10 animate-in fade-in whitespace-pre-wrap">
+                        {d}
+                    </div>
+                ) : (
+                    <div className="text-slate-400 text-sm text-center py-10">
+                        {l ? "AI 正在分析大數據..." : `點擊分析 ${clientName || '...'} 的健康狀況`}
+                    </div>
+                )}
+            </div>
+            <button 
+                onClick={run} 
+                disabled={l || !clientName} 
+                className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition flex justify-center items-center gap-2 disabled:opacity-50"
+            >
+                {l ? <Loader2 className="animate-spin" /> : <Sparkles size={16}/>} 
+                {l ? '分析中...' : '開始診斷'}
+            </button>
+        </div>
+    ); 
+}
 
 function SpecItem({ title, logic, desc }: any) {
     return (
@@ -444,4 +528,3 @@ function TabButton({ id, label, icon, active, onClick, isNew }: any) { return <b
 function KpiCard({ title, value, color, sub }: any) { return <div className={`bg-white p-6 rounded-xl shadow-sm border-l-4 ${color}`}><p className="text-sm text-gray-500">{title}</p><h3 className="text-2xl font-bold mt-2">{value}</h3>{sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}</div>; }
 function EmptyState({ message = "目前無資料" }: any) { return <div className="h-full w-full flex flex-col items-center justify-center text-slate-400 min-h-[200px] bg-slate-50 rounded-lg border border-dashed border-slate-200"><Info className="mb-2"/><p>{message}</p></div>; }
 function LoadingSkeleton() { return <div className="space-y-4 animate-pulse"><div className="h-32 bg-slate-200 rounded-xl"></div><div className="grid grid-cols-2 gap-4"><div className="h-64 bg-slate-200 rounded-xl"></div><div className="h-64 bg-slate-200 rounded-xl"></div></div></div>; }
-function AiDiagnosisPanel({ clientName, revenue }: any) { const [d, setD] = useState(""); const [l, setL] = useState(false); const run = async () => { setL(true); await new Promise(r => setTimeout(r, 2000)); setD(`【${clientName} 診斷】\n營收規模 $${(revenue||0).toLocaleString()}。VIP (前20%客戶) 貢獻佔比顯著，建議深化會員分級經營。`); setL(false); }; return <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl"><div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4"><Bot className="text-blue-400" /><h3 className="text-lg font-bold">AI 六脈診斷</h3></div><div className="flex-1 space-y-4">{d ? <p className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed">{d}</p> : <div className="text-slate-400 text-sm text-center py-10">{l ? "分析中..." : "點擊診斷"}</div>}</div><button onClick={run} disabled={l} className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-bold flex justify-center items-center gap-2"><Sparkles size={16}/> 開始診斷</button></div>; }
