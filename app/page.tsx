@@ -8,10 +8,11 @@ import {
 import { 
   Loader2, PieChart, Microscope, ListTodo, FileText, ArrowUp, Plus, 
   Bot, Flame, CheckCircle, UserCog, User, ArrowRight, RefreshCw, Sparkles, Upload, FileUp, Edit, Save, X,
-  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, Check
+  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2
 } from 'lucide-react';
 import Papa from 'papaparse';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+// ★★★ 關鍵修正 1：改用新的 @supabase/ssr 套件 ★★★
+import { createBrowserClient } from '@supabase/ssr';
 
 // --- Pulse Configuration ---
 const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg: string, border: string, text: string }> = {
@@ -23,38 +24,51 @@ const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg
   'Profit': { label: '獲利脈', icon: CircleDollarSign, color: 'slate', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
 };
 
+// --- Interface Definitions ---
+interface Task {
+  id: number;
+  pulse: string;
+  content: string;
+  source: string;
+  status: 'pool' | 'approved' | 'active' | 'done';
+  client_name?: string;
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('page1');
-  const [selectedClient, setSelectedClient] = useState<string>(''); // 當前選擇的客戶
-  const [clientList, setClientList] = useState<string[]>([]); // 客戶列表
+  const [selectedClient, setSelectedClient] = useState<string>(''); 
+  const [clientList, setClientList] = useState<string[]>([]); 
   
-  // 數據狀態
   const [data, setData] = useState<any[]>([]);
   const [rfmData, setRfmData] = useState<any[]>([]);
   const [cohortData, setCohortData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // 雷達圖分數
   const [pulseScores, setPulseScores] = useState<any[]>([
     { subject: '流量', A: 0, full: 5 }, { subject: '轉換', A: 0, full: 5 },
     { subject: '獲利', A: 0, full: 5 }, { subject: '主顧', A: 0, full: 5 },
     { subject: '回購', A: 0, full: 5 }, { subject: '口碑', A: 0, full: 5 }
   ]);
 
-  const supabase = createClientComponentClient();
+  // ★★★ 關鍵修正 2：使用 createBrowserClient 初始化 ★★★
+  // 請確保您的 .env.local 檔案中有這兩個變數
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   // 1. 初始載入：抓取所有客戶列表
   const fetchClients = async () => {
-    const { data } = await supabase.from('transactions').select('client_name');
-    if (data) {
-        // 去重
-        const uniqueClients = Array.from(new Set(data.map((item: any) => item.client_name)));
-        setClientList(uniqueClients as string[]);
-        // 如果還沒選客戶且有資料，預設選第一個
-        if (!selectedClient && uniqueClients.length > 0) {
-            setSelectedClient(uniqueClients[0] as string);
+    try {
+        const { data } = await supabase.from('transactions').select('client_name');
+        if (data) {
+            const uniqueClients = Array.from(new Set(data.map((item: any) => item.client_name))).filter(Boolean);
+            setClientList(uniqueClients as string[]);
+            if (!selectedClient && uniqueClients.length > 0) {
+                setSelectedClient(uniqueClients[0] as string);
+            }
         }
-    }
+    } catch (e) { console.error("Fetch clients error:", e); }
   };
 
   useEffect(() => { fetchClients(); }, []);
@@ -64,7 +78,6 @@ export default function Dashboard() {
     if (selectedClient) {
         refreshData(selectedClient);
     } else {
-        // 清空數據
         setData([]); setRfmData([]); setCohortData([]);
         setPulseScores(pulseScores.map(p => ({ ...p, A: 0 })));
     }
@@ -74,11 +87,9 @@ export default function Dashboard() {
     try {
         setLoading(true);
         
-        // 直接從 Supabase View 撈取經過 SQL 運算的結果 (Client Side Fetching)
-        // 這樣比呼叫 /api/ 更快且能確保 RLS/篩選正確
         const [dashRes, rfmRes, cohortRes] = await Promise.all([
             supabase.from('monthly_brand_pulse').select('*').eq('client_name', clientName).order('year_month', { ascending: true }),
-            supabase.from('rfm_analysis').select('*').eq('client_name', clientName).limit(100), // 限制點數避免卡頓
+            supabase.from('rfm_analysis').select('*').eq('client_name', clientName).limit(100),
             supabase.from('cohort_retention').select('*').eq('client_name', clientName)
         ]);
 
@@ -90,7 +101,6 @@ export default function Dashboard() {
         setRfmData(rfmDataRaw);
         processCohortData(cohortDataRaw);
         
-        // 計算分數 (使用後端 View 算好的總計資料來評分)
         calculatePulseScores(dashData);
         
         setLoading(false);
@@ -101,11 +111,13 @@ export default function Dashboard() {
   };
 
   const calculatePulseScores = (dashData: any[]) => {
-    if (!dashData || dashData.length === 0) return;
+    if (!dashData || dashData.length === 0) {
+        setPulseScores(pulseScores.map(p => ({ ...p, A: 0 })));
+        return;
+    }
     const latest = dashData[dashData.length - 1];
     const totalRev = latest.total_revenue || 1;
     
-    // 簡易評分邏輯
     const trafficScore = Math.min(5, Math.ceil((latest.new_customer_revenue / totalRev) * 10));
     const retentionScore = Math.min(5, Math.ceil((latest.old_customer_revenue / totalRev) * 12.5));
     const aovScore = Math.min(5, (latest.aov / 2000) * 5);
@@ -113,11 +125,11 @@ export default function Dashboard() {
 
     setPulseScores([
       { subject: '流量', A: parseFloat(trafficScore.toFixed(1)), full: 5 },
-      { subject: '轉換', A: 3.0, full: 5 }, // 暫無數據
+      { subject: '轉換', A: 3.0, full: 5 },
       { subject: '獲利', A: parseFloat(profitScore.toFixed(1)), full: 5 },
       { subject: '主顧', A: parseFloat(aovScore.toFixed(1)), full: 5 },
       { subject: '回購', A: parseFloat(retentionScore.toFixed(1)), full: 5 },
-      { subject: '口碑', A: 2.5, full: 5 }  // 暫無數據
+      { subject: '口碑', A: 2.5, full: 5 }
     ]);
   };
 
@@ -136,11 +148,10 @@ export default function Dashboard() {
 
   const latest = data[data.length - 1] || {};
 
-  // 上傳成功後的回調
   const handleUploadSuccess = (newClientName: string) => {
-      fetchClients(); // 更新列表
-      setSelectedClient(newClientName); // 自動切換到新客戶
-      setActiveTab('page1'); // 跳轉到報表頁
+      fetchClients();
+      setSelectedClient(newClientName);
+      setActiveTab('page1');
   };
 
   return (
@@ -153,7 +164,6 @@ export default function Dashboard() {
                     <span className="text-lg font-bold text-slate-800 hidden md:block">SMEbig War Room</span>
                 </div>
                 
-                {/* 客戶選擇器 (核心修改) */}
                 <div className="relative">
                     <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
                         <Building2 size={16} className="text-slate-500"/>
@@ -180,7 +190,6 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 space-y-8">
         
-        {/* 未選擇客戶時的提示 */}
         {!selectedClient && activeTab !== 'page4' && (
             <div className="h-[60vh] flex flex-col items-center justify-center text-slate-400 bg-white rounded-2xl shadow-sm border border-dashed border-slate-300">
                 <Building2 size={64} className="mb-4 text-slate-200"/>
@@ -192,7 +201,6 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* === P1: Operational Health Check === */}
         {selectedClient && activeTab === 'page1' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
             <div className="flex justify-between items-end">
@@ -243,7 +251,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* === P2: Deep Pathology === */}
         {selectedClient && activeTab === 'page2' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <h2 className="text-2xl font-bold text-slate-800">🔬 {selectedClient} - 深度病理分析</h2>
@@ -275,10 +282,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* === P3: Consultant Prescription === */}
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} />}
         
-        {/* === P4: Data Upload (Modified) === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                 <div className="max-w-2xl mx-auto">
@@ -301,7 +306,6 @@ export default function Dashboard() {
 
 // --- Components ---
 
-// DataUploader 升級版：支援輸入客戶名稱 & 成功回饋
 function DataUploader({ supabase, onSuccess }: any) { 
     const [uploading, setUploading] = useState(false); 
     const [clientName, setClientName] = useState("");
@@ -311,7 +315,7 @@ function DataUploader({ supabase, onSuccess }: any) {
     const handleFile = (e: any) => { 
         if (!clientName.trim()) {
             alert("請先輸入客戶名稱！");
-            e.target.value = ''; // Reset
+            e.target.value = '';
             return;
         }
 
@@ -340,15 +344,12 @@ function DataUploader({ supabase, onSuccess }: any) {
                         amount: isNaN(amount) ? 0 : amount, 
                         product_name: row['購買品項'] || row['product_name'], 
                         channel: row['通路'] || row['channel'] || 'EC',
-                        client_name: clientName // ★ 關鍵：寫入客戶名稱
+                        client_name: clientName
                     };
                 }).filter((r:any) => !isNaN(r.amount) && r.customer_id); 
                 
                 const BATCH_SIZE = 1000; 
                 try {
-                    // 先清空該客戶舊資料 (選擇性，這裡為了演示方便先保留append或先刪再加皆可，這裡採用直接Insert)
-                    // 若要先刪除： await supabase.from('transactions').delete().eq('client_name', clientName);
-
                     for (let i = 0; i < cleanRows.length; i += BATCH_SIZE) { 
                         const { error } = await supabase.from('transactions').insert(cleanRows.slice(i, i + BATCH_SIZE)); 
                         if(error) throw error;
@@ -359,7 +360,6 @@ function DataUploader({ supabase, onSuccess }: any) {
                     setStatus('success');
                     setMsg("🎉 上傳成功！系統正在生成分析報告...");
                     
-                    // 延遲 1.5 秒後跳轉，讓用戶看到成功訊息
                     setTimeout(() => {
                         onSuccess(clientName);
                     }, 1500);
@@ -430,8 +430,6 @@ function AiDiagnosisPanel({ clientName, revenue }: any) {
 }
 
 function ConsultantPrescriptionPage({ clientName }: any) {
-    // 這裡可以使用 clientName 去 fetch 該客戶的 tasks
-    // 為了演示，我們顯示假資料，但標題會變
     return (
         <div className="space-y-10 animate-in fade-in">
             <h2 className="text-2xl font-bold text-slate-800">💊 {clientName} - 顧問藥方與任務看板</h2>
