@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ScatterChart, Scatter, ZAxis, LineChart, Line, PieChart, Pie, Cell
@@ -54,7 +54,6 @@ export default function Dashboard() {
 
   const [loading, setLoading] = useState(false);
   
-  // 請確保 .env.local 有正確的環境變數
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -80,7 +79,6 @@ export default function Dashboard() {
 
   const refreshData = async (clientName: string) => {
     setLoading(true);
-    // Client-side Calculation for fast response
     const { data: rawTx } = await supabase.from('transactions').select('*').eq('client_name', clientName).order('order_date', { ascending: true });
     
     if (rawTx && rawTx.length > 0) {
@@ -196,17 +194,12 @@ export default function Dashboard() {
         .sort((a, b) => b.value - a.value);
     setChannelData(channelChartData);
 
-    // 5. RFM Scatter Data - ★★★ 修復重點：TypeScript 類型安全與日期處理 ★★★
+    // 5. RFM Scatter Data
     const rfmChartData = customers.map(c => {
         const today = new Date();
-        
-        // 1. 將 Set 轉為 Array 並排序，確保拿到的是時間順序
         const dateArray = Array.from(c.dates).sort();
-        // 2. 取最後一個 (最近一次購買日)，若無則 fallback 到今日
         const lastDateStr = dateArray[dateArray.length - 1] || today.toISOString();
         const lastDate = new Date(lastDateStr);
-
-        // 3. 計算 Recency (天數)
         const recencyDays = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
         
         return {
@@ -299,7 +292,7 @@ export default function Dashboard() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-                        <h2 className="text-xl font-bold mb-4">品牌六脈診斷 (V5.1 - 80/20 VIP)</h2>
+                        <h2 className="text-xl font-bold mb-4">品牌六脈診斷 (V5.3)</h2>
                         <div className="h-[300px]">
                         <ResponsiveContainer>
                             <RadarChart cx="50%" cy="50%" outerRadius="80%" data={pulseScores}>
@@ -343,6 +336,7 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 1. Product Sales (Top 10) */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-green-500 pl-3 mb-4">熱銷品項排行 (Top 10)</h3>
                     <div className="h-[300px]">
@@ -358,12 +352,14 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+                {/* 2. Channel Analysis */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-purple-500 pl-3 mb-4">通路成效分析</h3>
                     <div className="h-[300px]">
                         <ResponsiveContainer>
                             <PieChart>
-                                <Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                {/* ★★★ 修復重點：加上 { percent: any } 型別宣告與防呆 ★★★ */}
+                                <Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>
                                     {channelData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
