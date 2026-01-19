@@ -11,7 +11,8 @@ import {
   Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info
 } from 'lucide-react';
 import Papa from 'papaparse';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+// ★ 修改處 1：改用新的 SSR 套件
+import { createBrowserClient } from '@supabase/ssr';
 
 // --- Pulse Configuration ---
 const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg: string, border: string, text: string }> = {
@@ -37,7 +38,12 @@ export default function Dashboard() {
     { subject: '回購', A: 3, full: 5 }, { subject: '口碑', A: 3, full: 5 }
   ]);
 
-  const supabase = createClientComponentClient();
+  // ★ 修改處 2：初始化 Supabase Client (Browser 端專用)
+  // 這裡使用環境變數，請確保您的 .env.local 檔案中有設定
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   // --- 核心演算法：根據交易資料計算六脈分數 ---
   const calculateScoresFromRawData = (transactions: any[]) => {
@@ -51,7 +57,6 @@ export default function Dashboard() {
     const aov = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
     
     // 計算新舊客 (簡單邏輯：該用戶的第一筆訂單為新客，其餘為舊客)
-    // 注意：這在前端做大量運算會有點慢，正式版建議後端處理
     const customerFirstOrder: Record<string, number> = {};
     let newCustRev = 0;
     let oldCustRev = 0;
@@ -127,14 +132,6 @@ export default function Dashboard() {
                 const d = cohortMap[month];
                 return { m: month, v: [0,1,2,3].map(m => m===0?100 : Math.round((d.months[m]/d.total)*100)||0) };
              }));
-        }
-
-        // ★ 若 API 有回傳 Dashboard 數據，嘗試用它來更新雷達圖 (後備方案)
-        if (dashData.length > 0) {
-            // 這裡僅做簡單映射，精確計算依賴 DataUploader 的原始資料
-            const latest = dashData[dashData.length-1];
-            // 觸發一次狀態更新以重繪圖表
-            // (實際分數計算會在 DataUploader 完成後觸發 calculateScoresFromRawData)
         }
 
         setLoading(false);
@@ -342,7 +339,6 @@ function DataUploader({ supabase, onUploadComplete, onRawDataLoaded }: any) {
                     
                     // 日期容錯處理
                     let dateStr = row['購買日期'] || row['order_date'];
-                    // 假設 Excel 轉 CSV 可能出現 M/D/YY 格式，這裡簡單處理
                     const orderDate = new Date(dateStr);
 
                     return { 
@@ -389,7 +385,7 @@ function DataUploader({ supabase, onUploadComplete, onRawDataLoaded }: any) {
     ); 
 }
 
-// ... 下方保留 TabButton, KpiCard, EmptyState, AiDiagnosisPanel, ConsultantPrescriptionPage, SpecDetail 不變 (請確保從 V4.0 複製過來) ...
+// ... Sub-components ...
 function TabButton({ id, label, icon, active, onClick, isNew }: any) { return <button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-all ${active ? 'border-blue-600 text-blue-600 font-bold bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-blue-600'}`}>{icon} {label} {isNew && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">New</span>}</button>; }
 function KpiCard({ title, value, color }: any) { return <div className={`bg-white p-6 rounded-xl shadow-sm border-l-4 ${color}`}><p className="text-sm text-gray-500">{title}</p><h3 className="text-2xl font-bold mt-2">{value}</h3></div>; }
 function EmptyState({ message = "目前無資料" }: any) { return <div className="h-full w-full flex flex-col items-center justify-center text-slate-400 min-h-[200px] bg-slate-50 rounded-lg border border-dashed border-slate-200"><Info className="mb-2"/><p>{message}</p></div>; }
