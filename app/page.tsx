@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { 
   Loader2, PieChart as IconPie, Microscope, ListTodo, FileText, Upload, FileUp, 
-  Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2,
+  Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2, BookOpen,
   Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2
 } from 'lucide-react';
 import Papa from 'papaparse';
@@ -25,7 +25,6 @@ const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ff6b6b'];
 
-// --- Types ---
 interface Task {
   id: number;
   pulse: string;
@@ -39,13 +38,13 @@ export default function Dashboard() {
   const [selectedClient, setSelectedClient] = useState<string>(''); 
   const [clientList, setClientList] = useState<string[]>([]); 
   
-  // Data States (改為接收 View 的統計數據)
+  // Data States
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
   const [productData, setProductData] = useState<any[]>([]);
   const [channelData, setChannelData] = useState<any[]>([]);
   const [rfmData, setRfmData] = useState<any[]>([]);
   const [cohortData, setCohortData] = useState<any[]>([]);
-  const [kpiStats, setKpiStats] = useState({ totalRevenue: 0, totalOrders: 0, aov: 0, conversion: 0 });
+  const [kpiStats, setKpiStats] = useState({ totalRevenue: 0, totalOrders: 0, aov: 0 });
   
   const [pulseScores, setPulseScores] = useState<any[]>([
     { subject: '流量', A: 0, full: 5 }, { subject: '轉換', A: 0, full: 5 },
@@ -60,7 +59,7 @@ export default function Dashboard() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // 1. Fetch Clients (改為從 monthly_brand_pulse 抓，速度更快)
+  // 1. Fetch Clients
   const fetchClients = async () => {
     try {
         const { data } = await supabase.from('monthly_brand_pulse').select('client_name');
@@ -73,7 +72,7 @@ export default function Dashboard() {
   };
   useEffect(() => { fetchClients(); }, []);
 
-  // 2. 當選擇客戶改變時，重新抓取該客戶的數據
+  // 2. Fetch Data (View-Based)
   useEffect(() => {
     if (selectedClient) refreshData(selectedClient);
   }, [selectedClient]);
@@ -81,112 +80,56 @@ export default function Dashboard() {
   const refreshData = async (clientName: string) => {
     setLoading(true);
     try {
-        // ★★★ 關鍵修改：全部改用 View 查詢，確保數字與 SQL 一致 ★★★
-        
-        // 1. 月報表 (Monthly Pulse) - 用來算總營收與趨勢
-        const { data: monthlyRaw } = await supabase
-            .from('monthly_brand_pulse')
-            .select('*')
-            .eq('client_name', clientName)
-            .order('year_month', { ascending: true });
-
+        // 1. Monthly & KPI
+        const { data: monthlyRaw } = await supabase.from('monthly_brand_pulse').select('*').eq('client_name', clientName).order('year_month', { ascending: true });
         const mData = monthlyRaw || [];
         setMonthlyData(mData);
 
-        // 2. 計算 KPI 總數 (直接加總 View 的結果，保證準確)
         const totalRev = mData.reduce((acc, cur) => acc + (cur.total_revenue || 0), 0);
         const totalOrd = mData.reduce((acc, cur) => acc + (cur.order_count || 0), 0);
         const avgAov = totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0;
-        
-        setKpiStats({
-            totalRevenue: totalRev,
-            totalOrders: totalOrd,
-            aov: avgAov,
-            conversion: 3.5 // 暫時模擬，需更多數據源
-        });
+        setKpiStats({ totalRevenue: totalRev, totalOrders: totalOrd, aov: avgAov });
 
-        // 3. 商品排行 (Product Analytics View)
-        const { data: prodRaw } = await supabase
-            .from('product_analytics')
-            .select('*')
-            .eq('client_name', clientName)
-            .order('total_revenue', { ascending: false })
-            .limit(10);
+        // 2. Pulse Scores (New View)
+        const { data: scoresRaw } = await supabase.from('brand_pulse_scores').select('*').eq('client_name', clientName).single();
+        if (scoresRaw) {
+            setPulseScores([
+                { subject: '流量', A: Number(scoresRaw.traffic_score?.toFixed(1)) || 0, full: 5 },
+                { subject: '轉換', A: Number(scoresRaw.conversion_score?.toFixed(1)) || 0, full: 5 },
+                { subject: '獲利', A: Number(scoresRaw.profit_score?.toFixed(1)) || 0, full: 5 },
+                { subject: '主顧', A: Number(scoresRaw.vip_score?.toFixed(1)) || 0, full: 5 },
+                { subject: '回購', A: Number(scoresRaw.retention_score?.toFixed(1)) || 0, full: 5 },
+                { subject: '口碑', A: Number(scoresRaw.reputation_score?.toFixed(1)) || 0, full: 5 }
+            ]);
+        }
+
+        // 3. Product
+        const { data: prodRaw } = await supabase.from('product_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false }).limit(10);
         setProductData((prodRaw || []).map(p => ({ name: p.product_name, value: p.total_revenue })));
 
-        // 4. 通路分析 (Channel Analytics View)
-        const { data: chanRaw } = await supabase
-            .from('channel_analytics')
-            .select('*')
-            .eq('client_name', clientName)
-            .order('total_revenue', { ascending: false });
+        // 4. Channel
+        const { data: chanRaw } = await supabase.from('channel_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false });
         setChannelData((chanRaw || []).map(c => ({ name: c.channel, value: c.total_revenue })));
 
-        // 5. RFM (RFM View) - 限制 1000 點以防瀏覽器卡頓
-        const { data: rfmRaw } = await supabase
-            .from('rfm_analysis')
-            .select('*')
-            .eq('client_name', clientName)
-            .limit(1000);
-        
-        const rfmChart = (rfmRaw || []).map((r: any) => ({
-            x: r.recency_days,
-            y: r.frequency,
-            z: r.monetary
-        }));
-        setRfmData(rfmChart);
+        // 5. RFM (Limit 1000)
+        const { data: rfmRaw } = await supabase.from('rfm_analysis').select('*').eq('client_name', clientName).limit(1000);
+        setRfmData((rfmRaw || []).map((r: any) => ({ x: r.recency_days, y: r.frequency, z: r.monetary })));
 
-        // 6. Cohort (Cohort View)
-        const { data: cohortRaw } = await supabase
-            .from('cohort_retention')
-            .select('*')
-            .eq('client_name', clientName);
-        
-        // 轉置 Cohort 資料結構
+        // 6. Cohort
+        const { data: cohortRaw } = await supabase.from('cohort_retention').select('*').eq('client_name', clientName);
         const cohortMap: any = {};
         (cohortRaw || []).forEach((row: any) => {
             if (!cohortMap[row.cohort_month]) cohortMap[row.cohort_month] = { total: 0, months: {} };
             if (row.month_number === 0) cohortMap[row.cohort_month].total = row.total_users;
             cohortMap[row.cohort_month].months[row.month_number] = row.total_users;
         });
-        const cohortChart = Object.keys(cohortMap).sort().map(month => {
+        setCohortData(Object.keys(cohortMap).sort().map(month => {
             const d = cohortMap[month];
             return { m: month, v: [0,1,2,3].map(m => m===0?100 : Math.round((d.months[m]/d.total)*100)||0) };
-        });
-        setCohortData(cohortChart);
+        }));
 
-        // 7. 計算六脈分數 (基於統計數據)
-        calculateScoresFromStats(totalRev, totalOrd, avgAov, rfmChart);
-
-    } catch (err) {
-        console.error("Data Load Error:", err);
-    }
+    } catch (err) { console.error("Data Load Error:", err); }
     setLoading(false);
-  };
-
-  const calculateScoresFromStats = (revenue: number, orders: number, aov: number, rfm: any[]) => {
-      // 獲利力: Log Scale 評分
-      const profitScore = Math.min(5, Math.max(1, Math.log10(revenue || 1) - 4)); // 10萬=1, 100萬=2, 1億=4...
-      
-      // 主顧力 (80/20): 前 20% 客戶貢獻度 (需 RFM 資料)
-      let vipScore = 2.5;
-      if (rfm.length > 0) {
-          const sorted = [...rfm].sort((a,b) => b.z - a.z);
-          const top20Count = Math.ceil(sorted.length * 0.2);
-          const top20Rev = sorted.slice(0, top20Count).reduce((acc, cur) => acc + cur.z, 0);
-          const totalSampleRev = sorted.reduce((acc, cur) => acc + cur.z, 0);
-          const concentration = totalSampleRev > 0 ? (top20Rev / totalSampleRev) : 0;
-          vipScore = Math.min(5, (concentration / 0.8) * 5);
-      }
-
-      setPulseScores([
-        { subject: '流量', A: 3.5, full: 5 }, // 暫時給定值，因需 GA 資料
-        { subject: '轉換', A: 3.0, full: 5 },
-        { subject: '獲利', A: parseFloat(profitScore.toFixed(1)), full: 5 },
-        { subject: '主顧', A: parseFloat(vipScore.toFixed(1)), full: 5 },
-        { subject: '回購', A: 3.0, full: 5 }, // 暫時給定值
-        { subject: '口碑', A: 2.5, full: 5 }
-      ]);
   };
 
   const handleUploadSuccess = (newClientName: string) => {
@@ -222,6 +165,7 @@ export default function Dashboard() {
                 <TabButton id="page1" label="營運體檢" icon={<IconPie size={16}/>} active={activeTab === 'page1'} onClick={() => setActiveTab('page1')} />
                 <TabButton id="page2" label="深度病理" icon={<Microscope size={16}/>} active={activeTab === 'page2'} onClick={() => setActiveTab('page2')} />
                 <TabButton id="page3" label="顧問藥方" icon={<ListTodo size={16}/>} active={activeTab === 'page3'} onClick={() => setActiveTab('page3')} />
+                <TabButton id="page5" label="數據定義" icon={<BookOpen size={16}/>} active={activeTab === 'page5'} onClick={() => setActiveTab('page5')} />
                 <TabButton id="page4" label="資料上傳" icon={<Upload size={16}/>} active={activeTab === 'page4'} onClick={() => setActiveTab('page4')} isNew />
             </div>
         </div>
@@ -244,7 +188,6 @@ export default function Dashboard() {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
             <div className="flex justify-between items-end">
                 <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運總覽</h2>
-                <span className="text-xs text-slate-400">數據來源: Supabase Views</span>
             </div>
             {loading ? <LoadingSkeleton /> : (
             <>
@@ -252,7 +195,7 @@ export default function Dashboard() {
                     <KpiCard title="總營收" value={`$${kpiStats.totalRevenue.toLocaleString()}`} color="border-l-blue-500" />
                     <KpiCard title="訂單量" value={kpiStats.totalOrders.toLocaleString()} color="border-l-purple-500" />
                     <KpiCard title="客單價 (AOV)" value={`$${kpiStats.aov.toLocaleString()}`} color="border-l-yellow-500" />
-                    <KpiCard title="主顧貢獻度" value={`${(pulseScores[3].A * 20).toFixed(0)}%`} color="border-l-green-500" />
+                    <KpiCard title="VIP 貢獻佔比" value={`${(pulseScores[3].A / 5 * 80).toFixed(0)}%`} sub="(目標 80%)" color="border-l-green-500" />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -299,63 +242,56 @@ export default function Dashboard() {
         {selectedClient && activeTab === 'page2' && (
           <div className="space-y-6 animate-in fade-in">
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
-            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 1. Product Sales */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-green-500 pl-3 mb-4">熱銷品項排行 (Top 10)</h3>
-                    <div className="h-[300px]">
-                        <ResponsiveContainer>
-                            <BarChart layout="vertical" data={productData}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                <XAxis type="number" />
-                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} />
-                                <Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} />
-                                <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} name="銷售額" />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
+                    <div className="h-[300px]"><ResponsiveContainer><BarChart layout="vertical" data={productData}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} /><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} name="銷售額" /></BarChart></ResponsiveContainer></div>
                 </div>
-
-                {/* 2. Channel Analysis */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-purple-500 pl-3 mb-4">通路成效分析</h3>
-                    <div className="h-[300px]">
-                        <ResponsiveContainer>
-                            <PieChart>
-                                <Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>
-                                    {channelData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} />
-                                <Legend />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
+                    <div className="h-[300px]"><ResponsiveContainer><PieChart><Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{channelData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Legend /></PieChart></ResponsiveContainer></div>
                 </div>
             </div>
-
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3 mb-4">RFM 顧客價值分佈 (取樣 Top 1000)</h3>
-                <div className="h-[400px]">
-                    <ResponsiveContainer>
-                        <ScatterChart>
-                            <CartesianGrid />
-                            <XAxis type="number" dataKey="x" name="Recency (天前)" reversed />
-                            <YAxis type="number" dataKey="y" name="Frequency (次)" />
-                            <ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" />
-                            <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                            <Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} />
-                        </ScatterChart>
-                    </ResponsiveContainer>
-                </div>
+                <h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3 mb-4">RFM 顧客價值分佈 (取樣 1000 點)</h3>
+                <div className="h-[400px]"><ResponsiveContainer><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
             </div>
-          </div>
+        </div>
         )}
 
         {/* === Page 3: Consultant Prescription === */}
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} />}
+
+        {/* === Page 5: Data Specs (New) === */}
+        {activeTab === 'page5' && (
+            <div className="space-y-8 animate-in fade-in">
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義 (0~5分)</h3>
+                            <ul className="space-y-4">
+                                <SpecItem title="流量脈 (Traffic)" logic="Log10(總客戶數) * 1.5" desc="衡量品牌流量規模。客戶數越多分數越高 (對數增長)。" />
+                                <SpecItem title="轉換脈 (Conversion)" logic="有效訂單數 / 總訂單數" desc="衡量訂單含金量。若所有訂單皆有金額，則為滿分。" />
+                                <SpecItem title="獲利脈 (Profit)" logic="Log10(總營收) - 3" desc="衡量營收規模。10萬=2分, 100萬=3分, 1000萬=4分..." />
+                                <SpecItem title="主顧脈 (VIP)" logic="(Top 20% 客戶營收 / 總營收) / 0.8" desc="80/20 法則：若前 20% 客戶貢獻了 80% 營收，代表 VIP 價值極高 (滿分)。" />
+                                <SpecItem title="回購脈 (Retention)" logic="暫定固定值 (3.0)" desc="需進階 SQL 計算 (Repeated Customer Rate)。" />
+                                <SpecItem title="口碑脈 (Reputation)" logic="暫定固定值 (2.5)" desc="需推薦碼 (Referral Code) 欄位支援。" />
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg mb-4 text-slate-700">深度分析邏輯</h3>
+                            <ul className="space-y-4">
+                                <SpecItem title="KPI: 總營收" logic="SUM(Transactions.Amount)" desc="去除所有空格與逗號後的累加總合。" />
+                                <SpecItem title="KPI: 客單價 (AOV)" logic="總營收 / 總訂單數" desc="平均每筆訂單的消費金額。" />
+                                <SpecItem title="RFM 模型" logic="R: 最後購買距今天數 / F: 購買次數 / M: 累積金額" desc="用於區分沉睡客、常客與大戶。" />
+                                <SpecItem title="Cohort 留存" logic="同月首購客在後續月份的回購率" desc="觀察新客是否能留存下來。" />
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
 
         {/* === Page 4: Upload === */}
         {activeTab === 'page4' && (
@@ -364,7 +300,7 @@ export default function Dashboard() {
                     <div className="text-center mb-8">
                         <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Upload size={32} className="text-blue-600"/></div>
                         <h2 className="text-2xl font-bold text-slate-800">上傳交易資料</h2>
-                        <p className="text-slate-500">支援 CSV 格式。系統自動去空格、去逗號，並標記客戶名稱。</p>
+                        <p className="text-slate-500">支援 CSV 格式。系統將自動去除空格與千分位逗號，確保金額準確。</p>
                     </div>
                     <DataUploader supabase={supabase} onSuccess={handleUploadSuccess} />
                 </div>
@@ -376,6 +312,18 @@ export default function Dashboard() {
 }
 
 // --- Sub-Components ---
+
+function SpecItem({ title, logic, desc }: any) {
+    return (
+        <li className="border-b border-slate-100 pb-2">
+            <div className="flex justify-between font-bold text-slate-800 mb-1">
+                <span>{title}</span>
+                <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-mono">{logic}</span>
+            </div>
+            <p className="text-xs text-slate-500">{desc}</p>
+        </li>
+    )
+}
 
 function ConsultantPrescriptionPage({ clientName }: any) {
     const [tasks, setTasks] = useState<Task[]>([
@@ -493,7 +441,7 @@ function DataUploader({ supabase, onSuccess }: any) {
 }
 
 function TabButton({ id, label, icon, active, onClick, isNew }: any) { return <button onClick={onClick} className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${active ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>{icon} {label} {isNew && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">New</span>}</button>; }
-function KpiCard({ title, value, color }: any) { return <div className={`bg-white p-6 rounded-xl shadow-sm border-l-4 ${color}`}><p className="text-sm text-gray-500">{title}</p><h3 className="text-2xl font-bold mt-2">{value}</h3></div>; }
+function KpiCard({ title, value, color, sub }: any) { return <div className={`bg-white p-6 rounded-xl shadow-sm border-l-4 ${color}`}><p className="text-sm text-gray-500">{title}</p><h3 className="text-2xl font-bold mt-2">{value}</h3>{sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}</div>; }
 function EmptyState({ message = "目前無資料" }: any) { return <div className="h-full w-full flex flex-col items-center justify-center text-slate-400 min-h-[200px] bg-slate-50 rounded-lg border border-dashed border-slate-200"><Info className="mb-2"/><p>{message}</p></div>; }
 function LoadingSkeleton() { return <div className="space-y-4 animate-pulse"><div className="h-32 bg-slate-200 rounded-xl"></div><div className="grid grid-cols-2 gap-4"><div className="h-64 bg-slate-200 rounded-xl"></div><div className="h-64 bg-slate-200 rounded-xl"></div></div></div>; }
 function AiDiagnosisPanel({ clientName, revenue }: any) { const [d, setD] = useState(""); const [l, setL] = useState(false); const run = async () => { setL(true); await new Promise(r => setTimeout(r, 2000)); setD(`【${clientName} 診斷】\n營收規模 $${(revenue||0).toLocaleString()}。VIP (前20%客戶) 貢獻佔比顯著，建議深化會員分級經營。`); setL(false); }; return <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl"><div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4"><Bot className="text-blue-400" /><h3 className="text-lg font-bold">AI 六脈診斷</h3></div><div className="flex-1 space-y-4">{d ? <p className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed">{d}</p> : <div className="text-slate-400 text-sm text-center py-10">{l ? "分析中..." : "點擊診斷"}</div>}</div><button onClick={run} disabled={l} className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-bold flex justify-center items-center gap-2"><Sparkles size={16}/> 開始診斷</button></div>; }
