@@ -9,7 +9,7 @@ import {
   Bot, Flame, CheckCircle, UserCog, User, ArrowRight, RefreshCw, Sparkles, Upload, FileUp, Trash2, Edit, Save, X,
   Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+// import { supabase } from '@/lib/supabase'; // 暫時註解掉，避免報錯
 import Papa from 'papaparse';
 
 // --- Interface Definitions ---
@@ -31,6 +31,34 @@ const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg
   'Profit': { label: '獲利脈', icon: CircleDollarSign, color: 'slate', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
 };
 
+// --- Mock Data (模擬數據 - 救生圈) ---
+const MOCK_DASHBOARD_DATA = [
+  { year_month: '2023-10', total_revenue: 1200000, new_customer_revenue: 800000, old_customer_revenue: 400000, aov: 1500, order_count: 800 },
+  { year_month: '2023-11', total_revenue: 1500000, new_customer_revenue: 1000000, old_customer_revenue: 500000, aov: 1600, order_count: 930 },
+  { year_month: '2023-12', total_revenue: 1800000, new_customer_revenue: 1300000, old_customer_revenue: 500000, aov: 1550, order_count: 1100 },
+];
+
+const MOCK_RFM_DATA = Array.from({ length: 50 }, () => ({
+  x: Math.floor(Math.random() * 60), // Recency
+  y: Math.floor(Math.random() * 20), // Frequency
+  z: Math.floor(Math.random() * 5000) + 1000, // Monetary
+}));
+
+const MOCK_COHORT_RAW = [
+  { cohort_month: '2023-10', month_number: 0, total_users: 100 },
+  { cohort_month: '2023-10', month_number: 1, total_users: 15 },
+  { cohort_month: '2023-10', month_number: 2, total_users: 10 },
+  { cohort_month: '2023-11', month_number: 0, total_users: 120 },
+  { cohort_month: '2023-11', month_number: 1, total_users: 20 },
+];
+
+const MOCK_TASKS: Task[] = [
+  { id: 1, pulse: 'Traffic', content: 'Google Ads 關鍵字優化 (ROAS < 2)', source: 'AI', status: 'pool' },
+  { id: 2, pulse: 'Retention', content: '啟動首購 30 天喚醒計畫 (EDM)', source: 'AI', status: 'approved' },
+  { id: 3, pulse: 'VIP', content: '篩選 Top 50 大戶名單寄送禮品', source: 'Human', status: 'active' },
+  { id: 4, pulse: 'Conversion', content: '結帳頁面去除多餘欄位', source: 'AI', status: 'done' },
+];
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('page1');
   const [data, setData] = useState<any[]>([]);
@@ -38,33 +66,41 @@ export default function Dashboard() {
   const [cohortData, setCohortData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 模擬後端請求
   const refreshData = async () => {
     try {
-        const [dashRes, rfmRes, cohortRes] = await Promise.all([
-          fetch('/api/dashboard'),
-          fetch('/api/rfm'),
-          fetch('/api/cohort')
-        ]);
-        setData(await dashRes.json() || []);
-        setRfmData(await rfmRes.json() || []);
-        processCohortData(await cohortRes.json() || []);
+        setLoading(true);
+        // 模擬網路延遲
+        await new Promise(resolve => setTimeout(resolve, 800)); 
+        
+        setData(MOCK_DASHBOARD_DATA);
+        setRfmData(MOCK_RFM_DATA);
+        processCohortData(MOCK_COHORT_RAW);
+        
         setLoading(false);
-      } catch (err) { console.error(err); setLoading(false); }
+      } catch (err) { 
+        console.error("Data Load Error:", err); 
+        setLoading(false); 
+      }
   };
 
   useEffect(() => { refreshData(); }, []);
 
   const processCohortData = (rawData: any[]) => {
-    const cohortMap: any = {};
-    rawData.forEach(row => {
-        if (!cohortMap[row.cohort_month]) cohortMap[row.cohort_month] = { total: 0, months: {} };
-        if (row.month_number === 0) cohortMap[row.cohort_month].total = row.total_users;
-        cohortMap[row.cohort_month].months[row.month_number] = row.total_users;
-    });
-    setCohortData(Object.keys(cohortMap).sort().map(month => {
-        const d = cohortMap[month];
-        return { m: month, v: [0,1,2,3].map(m => m===0?100 : Math.round((d.months[m]/d.total)*100)||0) };
-    }));
+    try {
+        const cohortMap: any = {};
+        rawData.forEach(row => {
+            if (!cohortMap[row.cohort_month]) cohortMap[row.cohort_month] = { total: 0, months: {} };
+            if (row.month_number === 0) cohortMap[row.cohort_month].total = row.total_users;
+            cohortMap[row.cohort_month].months[row.month_number] = row.total_users;
+        });
+        setCohortData(Object.keys(cohortMap).sort().map(month => {
+            const d = cohortMap[month];
+            return { m: month, v: [0,1,2,3].map(m => m===0?100 : Math.round((d.months[m]/d.total)*100)||0) };
+        }));
+    } catch(e) {
+        console.error("Cohort Process Error", e);
+    }
   };
 
   const latest = data[data.length - 1] || {};
@@ -105,8 +141,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
                     <h2 className="text-xl font-bold mb-4">品牌六脈診斷 (模擬)</h2>
-                    <div className="h-[300px]"><ResponsiveContainer><RadarChart cx="50%" cy="50%" outerRadius="80%" data={[{subject:'流量',A:0,full:5},{subject:'轉換',A:0,full:5},{subject:'獲利',A:0,full:5},{subject:'主顧',A:4.5,full:5},{subject:'回購',A:2.0,full:5},{subject:'口碑',A:1.5,full:5}]}><PolarGrid /><PolarAngleAxis dataKey="subject" /><PolarRadiusAxis angle={30} domain={[0,5]} /><Radar name="現狀" dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} /><Legend/></RadarChart></ResponsiveContainer></div>
-                    <div className="text-center text-xs text-gray-400 mt-2">註：部分指標因無 GA/成本 資料顯示為 0。</div>
+                    <div className="h-[300px]"><ResponsiveContainer><RadarChart cx="50%" cy="50%" outerRadius="80%" data={[{subject:'流量',A:5,full:5},{subject:'轉換',A:3,full:5},{subject:'獲利',A:2.5,full:5},{subject:'主顧',A:4.5,full:5},{subject:'回購',A:2.0,full:5},{subject:'口碑',A:1.5,full:5}]}><PolarGrid /><PolarAngleAxis dataKey="subject" /><PolarRadiusAxis angle={30} domain={[0,5]} /><Radar name="現狀" dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} /><Legend/></RadarChart></ResponsiveContainer></div>
+                    <div className="text-center text-xs text-gray-400 mt-2">註：目前顯示為模擬數據 (Mock Data)。</div>
                 </div>
                 <AiDiagnosisPanel page="page1" dataSummary={{ revenue: latest.total_revenue, new_rev: latest.new_customer_revenue }} />
             </div>
@@ -208,13 +244,13 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* === P3: Consultant Prescription (New Layout) === */}
+        {/* === P3: Consultant Prescription (Mock Mode) === */}
         {activeTab === 'page3' && <ConsultantPrescriptionPage />}
 
-        {/* === P4: Data Specs & Chart Guide === */}
+        {/* === P4: Data Specs === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                {/* Raw Data Upload */}
+                {/* Raw Data Upload (Mock) */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Upload className="text-blue-600"/> 資料上傳區 (Raw Data)</h2>
                     <DataUploader onUploadComplete={refreshData} />
@@ -232,32 +268,7 @@ export default function Dashboard() {
                         <SpecDetail title="獲利脈 (Profit)" logic="毛利率" note="來源：成本表。狀態：無資料 (Value=0)。" color="slate" isMissing />
                     </div>
                 </div>
-
-                {/* Chart Guide (New Section) */}
-                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
-                    <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Info className="text-blue-500"/> 圖表閱讀指南</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                            <h4 className="font-bold text-purple-700 mb-2">1. RFM 矩陣圖</h4>
-                            <ul className="text-sm text-slate-600 space-y-2 list-disc pl-5">
-                                <li><strong>X軸 (Recency)</strong>: 越靠右邊，代表最近才剛買過 (活躍)。</li>
-                                <li><strong>Y軸 (Frequency)</strong>: 越靠上面，代表買越多次 (忠誠)。</li>
-                                <li><strong>泡泡大小 (Monetary)</strong>: 越大顆代表花越多錢 (大戶)。</li>
-                                <li><strong>解讀</strong>: 理想狀況是泡泡往「右上角」移動且變大。</li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-orange-700 mb-2">2. Cohort 留存熱圖</h4>
-                            <ul className="text-sm text-slate-600 space-y-2 list-disc pl-5">
-                                <li><strong>縱軸 (群組)</strong>: 該月份首次購買的新客人。</li>
-                                <li><strong>橫軸 (M+N)</strong>: 過了 N 個月後，這群人還有多少 % 回來買。</li>
-                                <li><strong>顏色</strong>: <span className="text-green-600 font-bold">綠色</span>代表留存佳，<span className="text-red-500 font-bold">紅色</span>代表流失嚴重。</li>
-                                <li><strong>解讀</strong>: 若 M+1 全是紅色，代表新客都是「一次性消費」。</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-             </div>
+            </div>
         )}
 
       </main>
@@ -265,11 +276,11 @@ export default function Dashboard() {
   );
 }
 
-// --- Consultant Prescription Page Component (New Layout) ---
+// --- Consultant Prescription Page Component (Mock Mode) ---
 function ConsultantPrescriptionPage() {
     const [isAdmin, setIsAdmin] = useState(false);
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [loading, setLoading] = useState(true);
+    // 使用 MOCK_TASKS 作為初始狀態
+    const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
     
     // Admin States
     const [manualPulse, setManualPulse] = useState('Traffic');
@@ -277,15 +288,20 @@ function ConsultantPrescriptionPage() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editContent, setEditContent] = useState('');
 
-    const fetchTasks = async () => { const res = await fetch('/api/tasks'); setTasks(await res.json()); setLoading(false); };
-    useEffect(() => { fetchTasks(); }, []);
-
-    // API Actions (Generate, Add, Update, Delete)
-    const generateAiTasks = async () => { setLoading(true); await fetch('/api/tasks', { method: 'POST', body: JSON.stringify({}) }); await fetchTasks(); };
-    const addManualTask = async () => { if (!manualContent) return; await fetch('/api/tasks', { method: 'POST', body: JSON.stringify({ manual: true, pulse: manualPulse, content: manualContent }) }); setManualContent(''); await fetchTasks(); };
-    const updateStatus = async (id: number, newStatus: string) => { setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus as any } : t)); await fetch('/api/tasks', { method: 'PATCH', body: JSON.stringify({ id, status: newStatus }) }); };
-    const deleteTask = async (id: number) => { setTasks(prev => prev.filter(t => t.id !== id)); await fetch('/api/tasks', { method: 'DELETE', body: JSON.stringify({ id }) }); };
-    const saveEdit = async (id: number) => { setTasks(prev => prev.map(t => t.id === id ? { ...t, content: editContent } : t)); await fetch('/api/tasks', { method: 'PATCH', body: JSON.stringify({ id, content: editContent }) }); setEditingId(null); };
+    // Mock Actions (Local State Only)
+    const generateAiTasks = async () => { 
+        const newTask: Task = { id: Date.now(), pulse: 'Conversion', content: 'AI 建議：優化購物車放棄挽回信 (Mock)', source: 'AI', status: 'pool' };
+        setTasks(prev => [...prev, newTask]); 
+    };
+    const addManualTask = () => { 
+        if (!manualContent) return; 
+        const newTask: Task = { id: Date.now(), pulse: manualPulse, content: manualContent, source: 'Human', status: 'pool' };
+        setTasks(prev => [...prev, newTask]); 
+        setManualContent(''); 
+    };
+    const updateStatus = (id: number, newStatus: string) => { setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus as any } : t)); };
+    const deleteTask = (id: number) => { setTasks(prev => prev.filter(t => t.id !== id)); };
+    const saveEdit = (id: number) => { setTasks(prev => prev.map(t => t.id === id ? { ...t, content: editContent } : t)); setEditingId(null); };
 
     // Filter Tasks
     const poolTasks = tasks.filter(t => t.status === 'pool');
@@ -309,7 +325,7 @@ function ConsultantPrescriptionPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Left: Pool & Manual Add */}
                     <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 h-[700px] flex flex-col">
-                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-700 flex items-center gap-2"><Bot size={18}/> 建議池 ({poolTasks.length})</h3><button onClick={generateAiTasks} disabled={loading} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-500 flex items-center gap-1">{loading ? <Loader2 size={12} className="animate-spin"/> : <><Plus size={12}/> AI 生成</>}</button></div>
+                        <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-700 flex items-center gap-2"><Bot size={18}/> 建議池 ({poolTasks.length})</h3><button onClick={generateAiTasks} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-500 flex items-center gap-1"><Plus size={12}/> AI 生成</button></div>
                         <div className="bg-white p-3 rounded shadow-sm border border-blue-200 mb-4">
                             <h4 className="text-xs font-bold text-blue-600 mb-2 flex items-center gap-1"><UserCog size={12}/> 手動新增</h4>
                             <div className="flex gap-2 mb-2">
@@ -351,11 +367,10 @@ function ConsultantPrescriptionPage() {
                 </div>
             )}
 
-            {/* === Client View (New Layout) === */}
+            {/* === Client View === */}
             {!isAdmin && (
                 <div className="space-y-10">
-                    
-                    {/* 1. Prescriptions (Categorized Boxes) */}
+                    {/* 1. Prescriptions */}
                     <div>
                         <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Sparkles className="text-purple-600"/> 顧問建議藥方 (請點擊加入改善)</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -397,7 +412,7 @@ function ConsultantPrescriptionPage() {
                         </div>
                     </div>
 
-                    {/* 3. History (at Bottom) */}
+                    {/* 3. History */}
                     <div className="opacity-70 grayscale hover:grayscale-0 transition duration-500">
                         <div className="flex items-center gap-2 mb-4 border-b border-slate-200 pb-2"><CheckCircle size={18} className="text-slate-400"/><h3 className="font-bold text-slate-500">歷史完成紀錄 ({doneTasks.length})</h3></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -410,9 +425,20 @@ function ConsultantPrescriptionPage() {
     );
 }
 
-// --- Sub-components (Unchanged) ---
+// --- Sub-components ---
 function TabButton({ id, label, icon, active, onClick, isNew }: any) { return <button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-all ${active ? 'border-blue-600 text-blue-600 font-bold bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-blue-600'}`}>{icon} {label} {isNew && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">New</span>}</button>; }
 function KpiCard({ title, value, color }: any) { return <div className={`bg-white p-6 rounded-xl shadow-sm border-l-4 ${color}`}><p className="text-sm text-gray-500">{title}</p><h3 className="text-2xl font-bold mt-2">{value}</h3></div>; }
-function AiDiagnosisPanel({ page, dataSummary }: any) { const [d, setD] = useState(""); const [l, setL] = useState(false); const run = async () => { setL(true); const r = await fetch('/api/diagnose', { method: 'POST', body: JSON.stringify({ page, dataSummary }) }); const j = await r.json(); setD(j.diagnosis); setL(false); }; return <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl"><div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4"><div className="bg-slate-700 p-2 rounded-lg"><Bot className="text-blue-400" /></div><h3 className="text-lg font-bold">SME AI 六脈診斷(未串接，需token)</h3></div><div className="flex-1 space-y-4">{d ? <div className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed border border-white/10 animate-in fade-in"><p>{d}</p></div> : <div className="text-slate-400 text-sm text-center py-10">{l ? "分析中..." : "點擊按鈕啟動 AI 診斷"}</div>}</div><button onClick={run} disabled={l} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition flex justify-center items-center gap-2">{l?'分析中...':<><Sparkles size={16}/> 開始診斷</>}</button></div>; }
+function AiDiagnosisPanel({ page, dataSummary }: any) { 
+    const [d, setD] = useState(""); 
+    const [l, setL] = useState(false); 
+    // Mock Diagnosis
+    const run = async () => { 
+        setL(true); 
+        await new Promise(r => setTimeout(r, 1500));
+        setD("【AI 初步診斷】\n流量脈表現優異 (Mock Data)，但回購率偏低，建議檢查 M+1 留存數據。主顧脈顯示 20% 客戶貢獻了 70% 營收，建議加強 VIP 經營。"); 
+        setL(false); 
+    }; 
+    return <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl"><div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4"><div className="bg-slate-700 p-2 rounded-lg"><Bot className="text-blue-400" /></div><h3 className="text-lg font-bold">SME AI 六脈診斷 (Mock)</h3></div><div className="flex-1 space-y-4">{d ? <div className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed border border-white/10 animate-in fade-in whitespace-pre-wrap"><p>{d}</p></div> : <div className="text-slate-400 text-sm text-center py-10">{l ? "分析中..." : "點擊按鈕啟動 AI 診斷"}</div>}</div><button onClick={run} disabled={l} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition flex justify-center items-center gap-2">{l?'分析中...':<><Sparkles size={16}/> 開始診斷</>}</button></div>; 
+}
 function SpecDetail({ title, logic, note, color, isMissing }: any) { const style = {blue:'text-blue-600 bg-blue-50 border-blue-100', green:'text-green-600 bg-green-50 border-green-100', yellow:'text-yellow-600 bg-yellow-50 border-yellow-100', red:'text-red-600 bg-red-50 border-red-100', purple:'text-purple-600 bg-purple-50 border-purple-100', slate:'text-slate-600 bg-slate-50 border-slate-100'}[color as string]||''; return <div className={`p-5 rounded-xl border ${style.split(' ')[2]} bg-white ${isMissing?'opacity-70 grayscale':''}`}><h4 className={`font-bold text-lg mb-2 flex justify-between ${style.split(' ')[0]}`}>{title} {isMissing&&<span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded-full">Missing</span>}</h4><div className={`text-sm font-mono p-2 rounded mb-3 border ${style}`}>{logic}</div><p className="text-xs text-gray-500">{note}</p></div>; }
-function DataUploader({ onUploadComplete }: any) { const [uploading, setUploading] = useState(false); const [msg, setMsg] = useState(""); const handleFile = (e: any) => { const file = e.target.files[0]; if (!file) return; setUploading(true); setMsg("解析中..."); Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (results) => { setMsg(`上傳中 (共${results.data.length}筆)...`); const cleanRows = results.data.map((row: any) => ({ order_date: new Date(row['Order_Date']), customer_id: row['Customer_ID'], amount: row['Amount'] ? parseFloat(row['Amount'].toString().replace(/,/g, '')) : 0, product_name: row['Product_Service'], channel: row['Channel'], import_batch_id: 'web_upload_' + Date.now() })).filter((r:any) => !isNaN(r.amount)); const BATCH_SIZE = 1000; for (let i = 0; i < cleanRows.length; i += BATCH_SIZE) { await supabase.from('transactions').insert(cleanRows.slice(i, i + BATCH_SIZE)); } setUploading(false); setMsg("🎉 上傳成功！"); onUploadComplete(); } }); }; return <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition"><input type="file" accept=".csv" onChange={handleFile} className="hidden" id="csv-upload" disabled={uploading} /><label htmlFor="csv-upload" className="cursor-pointer flex flex-col items-center gap-2"><FileUp size={40} className="text-blue-500"/><span className="font-bold text-slate-700">點擊上傳 CSV</span></label>{msg && <div className="mt-4 text-sm font-bold text-blue-600">{msg}</div>}</div>; }
+function DataUploader({ onUploadComplete }: any) { const [uploading, setUploading] = useState(false); const [msg, setMsg] = useState(""); const handleFile = (e: any) => { const file = e.target.files[0]; if (!file) return; setUploading(true); setMsg("解析中..."); Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (results) => { setMsg(`模擬上傳中 (共${results.data.length}筆)...`); await new Promise(r => setTimeout(r, 1000)); setUploading(false); setMsg("🎉 模擬上傳成功 (Mock Mode)！"); onUploadComplete(); } }); }; return <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition"><input type="file" accept=".csv" onChange={handleFile} className="hidden" id="csv-upload" disabled={uploading} /><label htmlFor="csv-upload" className="cursor-pointer flex flex-col items-center gap-2"><FileUp size={40} className="text-blue-500"/><span className="font-bold text-slate-700">點擊上傳 CSV</span></label>{msg && <div className="mt-4 text-sm font-bold text-blue-600">{msg}</div>}</div>; }
