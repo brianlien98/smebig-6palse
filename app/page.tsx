@@ -8,7 +8,7 @@ import {
 import { 
   Loader2, PieChart as IconPie, Microscope, ListTodo, FileText, Upload, FileUp, 
   Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2, BookOpen,
-  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus
+  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus, Filter
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { createBrowserClient } from '@supabase/ssr';
@@ -17,9 +17,9 @@ import { createBrowserClient } from '@supabase/ssr';
 const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg: string, border: string, text: string }> = {
   'Traffic': { label: '流量脈', icon: Users, color: 'blue', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
   'Conversion': { label: '轉換脈', icon: MousePointerClick, color: 'green', bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700' },
-  'VIP': { label: '金主脈', icon: Gem, color: 'yellow', bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700' }, // 更名
-  'Retention': { label: '老主脈', icon: Repeat, color: 'red', bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700' }, // 更名
-  'Reputation': { label: '擁主脈', icon: MessageSquare, color: 'purple', bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' }, // 更名
+  'VIP': { label: '金主脈', icon: Gem, color: 'yellow', bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700' }, 
+  'Retention': { label: '老主脈', icon: Repeat, color: 'red', bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700' }, 
+  'Reputation': { label: '擁主脈', icon: MessageSquare, color: 'purple', bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' }, 
   'Profit': { label: '獲利脈', icon: CircleDollarSign, color: 'slate', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
 };
 
@@ -45,14 +45,17 @@ export default function Dashboard() {
   const [rfmData, setRfmData] = useState<any[]>([]);
   const [cohortData, setCohortData] = useState<any[]>([]);
   
-  // 六脈實際數值狀態 (V6.0 新制)
+  // 新增：RFM 分群與 NES 模型資料
+  const [rfmSegments, setRfmSegments] = useState<any[]>([]);
+  const [nesData, setNesData] = useState<any[]>([]);
+
   const [pulseMetrics, setPulseMetrics] = useState({
-      traffic: { value: null, hasData: false, unit: '人' },      // 訪客數
-      conversion: { value: null, hasData: false, unit: '%' },    // 轉換率
-      profit: { value: 0, hasData: true, unit: '$' },            // 總營收
-      vip: { value: 0, hasData: true, unit: '$' },               // 平均客單價 (金主脈)
-      retention: { value: 0, hasData: true, unit: '%' },         // 回購率 (老主脈, >1次購買)
-      reputation: { value: null, hasData: false, unit: '分' }    // NPS
+      traffic: { value: null, hasData: false, unit: '人' },      
+      conversion: { value: null, hasData: false, unit: '%' },    
+      profit: { value: 0, hasData: true, unit: '$' },            
+      vip: { value: 0, hasData: true, unit: '$' },               
+      retention: { value: 0, hasData: true, unit: '%' },         
+      reputation: { value: null, hasData: false, unit: '分' }    
   });
 
   const [loading, setLoading] = useState(false);
@@ -81,7 +84,7 @@ export default function Dashboard() {
   const refreshData = async (clientName: string) => {
     setLoading(true);
     try {
-        // 1. Monthly & KPI (For Trends & Profit/VIP Pulse)
+        // 1. Monthly & KPI
         const { data: monthlyRaw } = await supabase.from('monthly_brand_pulse').select('*').eq('client_name', clientName).order('year_month', { ascending: true });
         const mData = monthlyRaw || [];
         setMonthlyData(mData);
@@ -90,35 +93,74 @@ export default function Dashboard() {
         const totalOrd = mData.reduce((acc, cur) => acc + (cur.order_count || 0), 0);
         const avgAov = totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0;
 
-        // 2. Retention Stats (For Old Customer Pulse)
+        // 2. Retention Stats
         const { data: retRaw } = await supabase.from('customer_retention_stats').select('*').eq('client_name', clientName);
         const totalCustomers = retRaw?.length || 0;
         const repeatCustomers = retRaw?.filter(c => c.purchase_days > 1).length || 0;
         const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
 
-        // Set Pulse Metrics
         setPulseMetrics({
-            traffic: { value: null, hasData: false, unit: '人' }, // 暫無流量資料
-            conversion: { value: null, hasData: false, unit: '%' }, // 暫無流量資料
+            traffic: { value: null, hasData: false, unit: '人' }, 
+            conversion: { value: null, hasData: false, unit: '%' }, 
             profit: { value: totalRev, hasData: true, unit: '$' },
             vip: { value: avgAov, hasData: true, unit: '$' },
             retention: { value: repeatRate, hasData: true, unit: '%' },
-            reputation: { value: null, hasData: false, unit: '分' } // 暫無 NPS 資料
+            reputation: { value: null, hasData: false, unit: '分' } 
         });
 
-        // 3. Product
+        // 3. Product & Channel
         const { data: prodRaw } = await supabase.from('product_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false }).limit(10);
         setProductData((prodRaw || []).map(p => ({ name: p.product_name, value: p.total_revenue })));
 
-        // 4. Channel
         const { data: chanRaw } = await supabase.from('channel_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false });
         setChannelData((chanRaw || []).map(c => ({ name: c.channel, value: c.total_revenue })));
 
-        // 5. RFM
-        const { data: rfmRaw } = await supabase.from('rfm_analysis').select('*').eq('client_name', clientName).limit(1000);
-        setRfmData((rfmRaw || []).map((r: any) => ({ x: r.recency_days, y: r.frequency, z: r.monetary })));
+        // 4. RFM & NES 核心運算
+        // 移除 limit()，完整抓取該客戶所有 RFM (約幾千筆，前端可負載)
+        const { data: rfmRaw } = await supabase.from('rfm_analysis').select('*').eq('client_name', clientName);
+        const fullRfm = rfmRaw || [];
+        
+        // 渲染用的散佈圖資料 (限制 1000 點防卡頓)
+        setRfmData(fullRfm.slice(0, 1000).map((r: any) => ({ x: r.recency_days, y: r.frequency, z: r.monetary })));
 
-        // 6. Cohort
+        // ★★★ 計算 RFM 黃金五大分群 ★★★
+        let ambassador = { name: '頂級大使(常客大戶)', count: 0, rev: 0, fill: '#f59e0b' };
+        let star = { name: '潛力新星(首購大戶)', count: 0, rev: 0, fill: '#3b82f6' };
+        let regular = { name: '穩定常客(回購小資)', count: 0, rev: 0, fill: '#10b981' };
+        let sleepingWhale = { name: '沉睡大戶(流失高危)', count: 0, rev: 0, fill: '#ef4444' };
+        let lost = { name: '流失過客(單次小資)', count: 0, rev: 0, fill: '#94a3b8' };
+        let others = { name: '其他一般客', count: 0, rev: 0, fill: '#cbd5e1' };
+
+        // ★★★ 計算 NES 模型 ★★★
+        let nes = {
+            N: { name: 'N: 新客 (<120天首購)', count: 0, fill: '#3b82f6' },
+            E: { name: 'E: 既有活躍客 (近期回購)', count: 0, fill: '#10b981' },
+            S: { name: 'S: 沉睡客 (>200天未見)', count: 0, fill: '#ef4444' }
+        };
+
+        fullRfm.forEach((c: any) => {
+            const r = c.recency_days;
+            const f = c.frequency;
+            const m = c.monetary;
+
+            // 分群邏輯 (根據 CUPETIT 特性微調)
+            if (r <= 120 && f >= 3 && m > 20000) { ambassador.count++; ambassador.rev += m; }
+            else if (r <= 120 && f === 1 && m > 10000) { star.count++; star.rev += m; }
+            else if (r <= 200 && f >= 2 && m <= 10000) { regular.count++; regular.rev += m; }
+            else if (r > 200 && m > 20000) { sleepingWhale.count++; sleepingWhale.rev += m; }
+            else if (r > 200 && f === 1 && m <= 2000) { lost.count++; lost.rev += m; }
+            else { others.count++; others.rev += m; }
+
+            // NES 邏輯
+            if (r <= 120 && f === 1) nes.N.count++;
+            else if (r <= 200 && f >= 2) nes.E.count++;
+            else if (r > 200) nes.S.count++;
+        });
+
+        setRfmSegments([ambassador, star, regular, sleepingWhale, lost, others].filter(s => s.count > 0));
+        setNesData([nes.N, nes.E, nes.S]);
+
+        // 5. Cohort
         const { data: cohortRaw } = await supabase.from('cohort_retention').select('*').eq('client_name', clientName);
         const cohortMap: any = {};
         (cohortRaw || []).forEach((row: any) => {
@@ -169,7 +211,7 @@ export default function Dashboard() {
                 <TabButton id="page2" label="深度病理" icon={<Microscope size={16}/>} active={activeTab === 'page2'} onClick={() => setActiveTab('page2')} />
                 <TabButton id="page3" label="顧問藥方" icon={<ListTodo size={16}/>} active={activeTab === 'page3'} onClick={() => setActiveTab('page3')} />
                 <TabButton id="page5" label="數據定義" icon={<BookOpen size={16}/>} active={activeTab === 'page5'} onClick={() => setActiveTab('page5')} />
-                <TabButton id="page4" label="資料上傳" icon={<Upload size={16}/>} active={activeTab === 'page4'} onClick={() => setActiveTab('page4')} isNew />
+                <TabButton id="page4" label="資料上傳" icon={<Upload size={16}/>} active={activeTab === 'page4'} onClick={() => setActiveTab('page4')} />
             </div>
         </div>
       </nav>
@@ -186,11 +228,10 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* === Page 1: Overview (V6.0 No Radar) === */}
+        {/* === Page 1: Overview === */}
         {selectedClient && activeTab === 'page1' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
             
-            {/* Top Bar: Time Filter & Health Check */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
@@ -206,75 +247,46 @@ export default function Dashboard() {
 
             {loading ? <LoadingSkeleton /> : (
             <>
-                {/* Module 2: The 6-Pulse Scorecards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <PulseCard 
-                        title="流量脈 (獲客)" 
-                        icon={<Users size={20}/>} 
-                        color="blue" 
-                        data={pulseMetrics.traffic} 
-                        missingMsg="缺少網站流量與行銷花費數據"
-                    />
-                    <PulseCard 
-                        title="轉換脈 (成交)" 
-                        icon={<MousePointerClick size={20}/>} 
-                        color="green" 
-                        data={pulseMetrics.conversion} 
-                        missingMsg="缺少網站流量數據"
-                    />
-                    <PulseCard 
-                        title="獲利脈 (總營收)" 
-                        icon={<CircleDollarSign size={20}/>} 
-                        color="slate" 
-                        data={pulseMetrics.profit} 
-                        trend={8.5} // 模擬趨勢，未來可由 SQL 提供
-                    />
-                    <PulseCard 
-                        title="金主脈 (客單價)" 
-                        icon={<Gem size={20}/>} 
-                        color="yellow" 
-                        data={pulseMetrics.vip} 
-                        trend={-2.1} 
-                    />
-                    <PulseCard 
-                        title="老主脈 (回購率)" 
-                        icon={<Repeat size={20}/>} 
-                        color="red" 
-                        data={pulseMetrics.retention} 
-                        trend={5.4} 
-                    />
-                    <PulseCard 
-                        title="擁主脈 (NPS口碑)" 
-                        icon={<MessageSquare size={20}/>} 
-                        color="purple" 
-                        data={pulseMetrics.reputation} 
-                        missingMsg="缺少 NPS 分數與推薦碼數據"
+                    <PulseCard title="流量脈 (獲客)" icon={<Users size={20}/>} color="blue" data={pulseMetrics.traffic} missingMsg="缺少網站流量與行銷花費數據" />
+                    <PulseCard title="轉換脈 (成交)" icon={<MousePointerClick size={20}/>} color="green" data={pulseMetrics.conversion} missingMsg="缺少網站流量數據" />
+                    <PulseCard title="獲利脈 (總營收)" icon={<CircleDollarSign size={20}/>} color="slate" data={pulseMetrics.profit} trend={8.5} />
+                    <PulseCard title="金主脈 (客單價)" icon={<Gem size={20}/>} color="yellow" data={pulseMetrics.vip} trend={-2.1} />
+                    <PulseCard title="老主脈 (回購率)" icon={<Repeat size={20}/>} color="red" data={pulseMetrics.retention} trend={5.4} />
+                    <PulseCard title="擁主脈 (NPS口碑)" icon={<MessageSquare size={20}/>} color="purple" data={pulseMetrics.reputation} missingMsg="缺少 NPS 分數與推薦碼數據" />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-slate-800">獲利脈與金主脈趨勢 (營收 vs 客單價)</h3>
+                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">雙軸分析</span>
+                        </div>
+                        <div className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <ComposedChart data={monthlyData}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="year_month" />
+                                    <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
+                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `$${val}`} />
+                                    <Tooltip formatter={(val: any) => `$${Number(val).toLocaleString()}`} />
+                                    <Legend />
+                                    <Bar yAxisId="left" dataKey="total_revenue" fill="#3b82f6" name="總營收 (左軸)" radius={[4,4,0,0]} />
+                                    <Line yAxisId="right" type="monotone" dataKey="aov" stroke="#f59e0b" strokeWidth={3} name="平均客單價 (右軸)" dot={{ r: 4 }} />
+                                </ComposedChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    {/* 真實呼叫 API，並傳入 RFM/NES 分群結果供 AI 參考 */}
+                    <AiDiagnosisPanel 
+                        clientName={selectedClient} 
+                        revenue={pulseMetrics.profit.value} 
+                        rfmSegments={rfmSegments}
+                        nesData={nesData}
+                        topProducts={productData}
                     />
                 </div>
 
-                {/* Module 3: Multi-Metric Trend Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-bold text-slate-800">獲利脈與金主脈趨勢 (營收 vs 客單價)</h3>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">雙軸分析</span>
-                    </div>
-                    <div className="h-[350px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={monthlyData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="year_month" />
-                                <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
-                                <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `$${val}`} />
-                                <Tooltip formatter={(val: any) => `$${Number(val).toLocaleString()}`} />
-                                <Legend />
-                                <Bar yAxisId="left" dataKey="total_revenue" fill="#3b82f6" name="總營收 (左軸)" radius={[4,4,0,0]} />
-                                <Line yAxisId="right" type="monotone" dataKey="aov" stroke="#f59e0b" strokeWidth={3} name="平均客單價 (右軸)" dot={{ r: 4 }} />
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Module 4: Period-over-Period Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-slate-50">
                         <h3 className="text-lg font-bold text-slate-800">六脈跨期比較表 (概覽)</h3>
@@ -309,6 +321,52 @@ export default function Dashboard() {
         {selectedClient && activeTab === 'page2' && (
           <div className="space-y-6 animate-in fade-in">
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
+            
+            {/* ★★★ 新增：NES 模型與 RFM 佔比 ★★★ */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* NES 漏斗/長條圖 */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3">NES 顧客生命週期</h3>
+                        <span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">N=新, E=活, S=睡</span>
+                    </div>
+                    <div className="h-[250px]">
+                        <ResponsiveContainer>
+                            <BarChart data={nesData} layout="vertical" margin={{ left: 40 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" />
+                                <YAxis dataKey="name" type="category" width={120} tick={{fontSize: 11}} />
+                                <Tooltip formatter={(val:any) => `${val.toLocaleString()} 人`} />
+                                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                                    {nesData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 text-center">診斷：若 S 柱狀圖最長，代表大量過去獲取的客源已流失。</p>
+                </div>
+
+                {/* RFM 黃金客群營收佔比 */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800 border-l-4 border-yellow-500 pl-3">RFM 分群營收貢獻</h3>
+                        <span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">誰是您的金雞母？</span>
+                    </div>
+                    <div className="h-[250px]">
+                        <ResponsiveContainer>
+                            <PieChart>
+                                <Pie data={rfmSegments} dataKey="rev" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>
+                                    {rfmSegments.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}
+                                </Pie>
+                                <Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 text-center">目標：將【潛力新星】與【穩定常客】轉化為【頂級大使】。</p>
+                </div>
+            </div>
+
+            {/* 產品與通路 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-green-500 pl-3 mb-4">熱銷品項排行 (Top 10)</h3>
@@ -319,10 +377,12 @@ export default function Dashboard() {
                     <div className="h-[300px]"><ResponsiveContainer><PieChart><Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{channelData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Legend /></PieChart></ResponsiveContainer></div>
                 </div>
             </div>
+
+            {/* 散佈圖與留存表 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3 mb-4">RFM 顧客價值分佈 (取樣 1000 點)</h3>
-                    <div className="h-[400px]"><ResponsiveContainer><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
+                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-slate-500 pl-3 mb-4">RFM 原始散佈圖 (取樣 1000 點)</h3>
+                    <div className="h-[300px]"><ResponsiveContainer><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm overflow-x-auto border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-orange-500 pl-3 mb-4">同層留存率 (Cohort)</h3>
@@ -334,17 +394,17 @@ export default function Dashboard() {
         </div>
         )}
 
-        {/* === Page 3: Consultant Prescription === */}
-        {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} />}
+        {/* === Page 3: Consultant Prescription (動態帶入 RFM/NES 數據) === */}
+        {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} rfmSegments={rfmSegments} nesData={nesData} />}
 
-        {/* === Page 5: Data Specs (Updated) === */}
+        {/* === Page 5: Data Specs === */}
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V6.0 跨期比較制)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V7.0)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
-                            <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義</h3>
+                            <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義 (跨期比較制)</h3>
                             <ul className="space-y-4">
                                 <SpecItem title="流量脈 (Traffic)" logic="總不重複訪客數 / 行銷費用" desc="衡量網站流量與有效獲客成本 (CAC)。(需補充 GA 與廣告數據)" />
                                 <SpecItem title="轉換脈 (Conversion)" logic="總訂單數 / 總訪客數" desc="衡量進站後下單的比例。(需補充流量數據)" />
@@ -355,11 +415,13 @@ export default function Dashboard() {
                             </ul>
                         </div>
                         <div>
-                            <h3 className="font-bold text-lg mb-4 text-slate-700">深度分析邏輯</h3>
+                            <h3 className="font-bold text-lg mb-4 text-slate-700">RFM & NES 分群邏輯 (CUPETIT 專屬)</h3>
                             <ul className="space-y-4">
-                                <SpecItem title="KPI: 總營收" logic="SUM(Transactions.Amount)" desc="去除所有空格與逗號後的累加總合。" />
-                                <SpecItem title="RFM 模型" logic="R: 最後購買距今天數 / F: 購買次數 / M: 累積金額" desc="用於區分沉睡客、常客與大戶。" />
-                                <SpecItem title="Cohort 留存" logic="同月首購客在後續月份的回購率" desc="觀察新客是否能留存下來。" />
+                                <SpecItem title="NES: N 新客" logic="R <= 120天 且 F = 1次" desc="近期成功獲取的新面孔。" />
+                                <SpecItem title="NES: E 活躍客" logic="R <= 200天 且 F >= 2次" desc="有回購行為且近期有互動的客人。" />
+                                <SpecItem title="NES: S 沉睡客" logic="R > 200天" desc="超過大半年未購買，流失風險極高。" />
+                                <SpecItem title="RFM: 頂級大使" logic="R <= 120天 且 F >= 3次 且 M > 20,000" desc="極致尊榮服務，不打折，給特權。" />
+                                <SpecItem title="RFM: 沉睡大戶" logic="R > 200天 且 M > 20,000" desc="曾經花很多錢但消失了，需專人致電重度挽回。" />
                             </ul>
                         </div>
                     </div>
@@ -389,7 +451,6 @@ export default function Dashboard() {
 
 function PulseCard({ title, icon, color, data, missingMsg, trend }: any) {
     const hasData = data.hasData;
-    
     const colors: any = {
         blue: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
         green: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
@@ -452,14 +513,105 @@ function TableRow({ title, val, unit, status, msg }: any) {
     );
 }
 
-function ConsultantPrescriptionPage({ clientName }: any) {
-    const [tasks, setTasks] = useState<Task[]>([
-        { id: 1, pulse: 'Traffic', content: `針對 ${clientName} 新客投放 Google Ads`, source: 'AI', status: 'pool' },
-        { id: 2, pulse: 'Retention', content: '設計老客回歸 8 折券', source: 'Human', status: 'approved' },
-        { id: 3, pulse: 'VIP', content: '篩選年度 Top 20 寄送禮品', source: 'Human', status: 'active' }
-    ]);
+// ★★★ AI Diagnosis Panel：傳送更精準的 NES 數據給 Gemini ★★★
+function AiDiagnosisPanel({ clientName, revenue, rfmSegments, nesData, topProducts }: any) { 
+    const [d, setD] = useState(""); 
+    const [l, setL] = useState(false); 
+    
+    const run = async () => { 
+        if (!clientName) return;
+        setL(true); 
+        try {
+            const top3 = topProducts?.slice(0, 3).map((p:any) => p.name) || [];
+            
+            // 整理要餵給 AI 的資料
+            const aiPayload = {
+                clientName, 
+                revenue, 
+                rfmSummary: rfmSegments.map((s:any) => `${s.name}: ${s.count}人 (貢獻$${s.rev})`),
+                nesSummary: nesData.map((s:any) => `${s.name}: ${s.count}人`),
+                topProducts: top3
+            };
+
+            const res = await fetch('/api/diagnose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(aiPayload) // 將新的 payload 傳給後端
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                setD(data.diagnosis);
+            } else {
+                setD("AI 連線失敗，請檢查網路或後端設定。");
+            }
+        } catch (e) {
+            console.error(e);
+            setD("連線錯誤，無法取得 AI 診斷。");
+        }
+        setL(false); 
+    }; 
+    
+    return (
+        <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl">
+            <div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4">
+                <Bot className="text-blue-400" />
+                <h3 className="text-lg font-bold">AI 營運診斷</h3>
+            </div>
+            <div className="flex-1 space-y-4">
+                {d ? (
+                    <div className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed border border-white/10 animate-in fade-in whitespace-pre-wrap">
+                        {d}
+                    </div>
+                ) : (
+                    <div className="text-slate-400 text-sm text-center py-10">
+                        {l ? "AI 正在分析 RFM 與 NES 數據..." : `點擊分析 ${clientName || '...'} 的健康狀況`}
+                    </div>
+                )}
+            </div>
+            <button onClick={run} disabled={l || !clientName} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition flex justify-center items-center gap-2 disabled:opacity-50">
+                {l ? <Loader2 className="animate-spin" /> : <Sparkles size={16}/>} 
+                {l ? '分析中...' : '開始診斷'}
+            </button>
+        </div>
+    ); 
+}
+
+// ★★★ Consultant Prescription：動態載入任務 ★★★
+function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
+    const [tasks, setTasks] = useState<Task[]>([]);
     const [newTaskContent, setNewTaskContent] = useState('');
     const [newPulse, setNewPulse] = useState('Traffic');
+
+    // 當傳入的 RFM 資料改變時，自動生成建議任務！
+    useEffect(() => {
+        if (!rfmSegments || rfmSegments.length === 0) return;
+        
+        const generatedTasks: Task[] = [];
+        
+        // 尋找沉睡大戶
+        const sleepingWhales = rfmSegments.find((s:any) => s.name.includes('沉睡大戶'));
+        if (sleepingWhales && sleepingWhales.count > 0) {
+            generatedTasks.push({ id: 1, pulse: 'Retention', content: `【緊急挽回】致電關心 ${sleepingWhales.count} 位沉睡大戶，發送高單價尊榮回歸禮。`, source: 'System', status: 'pool' });
+        }
+
+        // 尋找潛力新星
+        const stars = rfmSegments.find((s:any) => s.name.includes('潛力新星'));
+        if (stars && stars.count > 0) {
+            generatedTasks.push({ id: 2, pulse: 'VIP', content: `【回購誘發】發送日常甜點體驗券給 ${stars.count} 位潛力新星，將其轉化為常客。`, source: 'System', status: 'approved' });
+        }
+
+        // 尋找頂級大使
+        const ambassadors = rfmSegments.find((s:any) => s.name.includes('頂級大使'));
+        if (ambassadors && ambassadors.count > 0) {
+            generatedTasks.push({ id: 3, pulse: 'Reputation', content: `【口碑擴散】邀請 ${ambassadors.count} 位頂級大使填寫 NPS 問卷並提供轉介紹獎勵。`, source: 'System', status: 'active' });
+        }
+
+        // 加入預設任務
+        generatedTasks.push({ id: 4, pulse: 'Traffic', content: `針對 ${clientName} 的新客投放 Google 再行銷廣告`, source: 'Human', status: 'pool' });
+
+        setTasks(generatedTasks);
+    }, [clientName, rfmSegments]);
 
     const addTask = () => {
         if (!newTaskContent.trim()) return;
@@ -488,7 +640,7 @@ function ConsultantPrescriptionPage({ clientName }: any) {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 min-h-[500px]">
-                    <h3 className="font-bold text-slate-600 mb-4 flex items-center gap-2"><Bot size={18}/> 建議池 (Pool)</h3>
+                    <h3 className="font-bold text-slate-600 mb-4 flex items-center gap-2"><Bot size={18}/> 建議池 (System & Pool)</h3>
                     <div className="space-y-2">{poolTasks.map(t => (<div key={t.id} className="bg-white p-3 rounded shadow-sm border border-slate-200 group"><div className="flex justify-between mb-1"><span className={`text-[10px] px-1.5 rounded ${PULSE_CONFIG[t.pulse]?.bg} ${PULSE_CONFIG[t.pulse]?.text}`}>{PULSE_CONFIG[t.pulse]?.label}</span><div className="opacity-0 group-hover:opacity-100 flex gap-1"><button onClick={() => moveTask(t.id, 'approved')} className="text-green-500"><CheckCircle size={16}/></button><button onClick={() => deleteTask(t.id)} className="text-red-400"><Trash2 size={16}/></button></div></div><p className="text-sm text-slate-700">{t.content}</p></div>))}</div>
                 </div>
                 <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 min-h-[500px]">
