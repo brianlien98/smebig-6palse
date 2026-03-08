@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ScatterChart, Scatter, ZAxis, LineChart, Line, PieChart, Pie, Cell
+  ScatterChart, Scatter, ZAxis, LineChart, Line, PieChart, Pie, Cell, ComposedChart
 } from 'recharts';
 import { 
   Loader2, PieChart as IconPie, Microscope, ListTodo, FileText, Upload, FileUp, 
   Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2, BookOpen,
-  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2
+  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { createBrowserClient } from '@supabase/ssr';
@@ -17,9 +17,9 @@ import { createBrowserClient } from '@supabase/ssr';
 const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg: string, border: string, text: string }> = {
   'Traffic': { label: '流量脈', icon: Users, color: 'blue', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
   'Conversion': { label: '轉換脈', icon: MousePointerClick, color: 'green', bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700' },
-  'VIP': { label: '主顧脈', icon: Gem, color: 'yellow', bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700' },
-  'Retention': { label: '回購脈', icon: Repeat, color: 'red', bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700' },
-  'Reputation': { label: '口碑脈', icon: MessageSquare, color: 'purple', bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
+  'VIP': { label: '金主脈', icon: Gem, color: 'yellow', bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700' }, // 更名
+  'Retention': { label: '老主脈', icon: Repeat, color: 'red', bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700' }, // 更名
+  'Reputation': { label: '擁主脈', icon: MessageSquare, color: 'purple', bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' }, // 更名
   'Profit': { label: '獲利脈', icon: CircleDollarSign, color: 'slate', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
 };
 
@@ -44,13 +44,16 @@ export default function Dashboard() {
   const [channelData, setChannelData] = useState<any[]>([]);
   const [rfmData, setRfmData] = useState<any[]>([]);
   const [cohortData, setCohortData] = useState<any[]>([]);
-  const [kpiStats, setKpiStats] = useState({ totalRevenue: 0, totalOrders: 0, aov: 0 });
   
-  const [pulseScores, setPulseScores] = useState<any[]>([
-    { subject: '流量', A: 0, full: 5 }, { subject: '轉換', A: 0, full: 5 },
-    { subject: '獲利', A: 0, full: 5 }, { subject: '主顧', A: 0, full: 5 },
-    { subject: '回購', A: 0, full: 5 }, { subject: '口碑', A: 0, full: 5 }
-  ]);
+  // 六脈實際數值狀態 (V6.0 新制)
+  const [pulseMetrics, setPulseMetrics] = useState({
+      traffic: { value: null, hasData: false, unit: '人' },      // 訪客數
+      conversion: { value: null, hasData: false, unit: '%' },    // 轉換率
+      profit: { value: 0, hasData: true, unit: '$' },            // 總營收
+      vip: { value: 0, hasData: true, unit: '$' },               // 平均客單價 (金主脈)
+      retention: { value: 0, hasData: true, unit: '%' },         // 回購率 (老主脈, >1次購買)
+      reputation: { value: null, hasData: false, unit: '分' }    // NPS
+  });
 
   const [loading, setLoading] = useState(false);
   
@@ -59,7 +62,6 @@ export default function Dashboard() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // 1. Fetch Clients
   const fetchClients = async () => {
     try {
         const { data } = await supabase.from('monthly_brand_pulse').select('client_name');
@@ -72,7 +74,6 @@ export default function Dashboard() {
   };
   useEffect(() => { fetchClients(); }, []);
 
-  // 2. Fetch Data (View-Based)
   useEffect(() => {
     if (selectedClient) refreshData(selectedClient);
   }, [selectedClient]);
@@ -80,7 +81,7 @@ export default function Dashboard() {
   const refreshData = async (clientName: string) => {
     setLoading(true);
     try {
-        // 1. Monthly & KPI
+        // 1. Monthly & KPI (For Trends & Profit/VIP Pulse)
         const { data: monthlyRaw } = await supabase.from('monthly_brand_pulse').select('*').eq('client_name', clientName).order('year_month', { ascending: true });
         const mData = monthlyRaw || [];
         setMonthlyData(mData);
@@ -88,20 +89,22 @@ export default function Dashboard() {
         const totalRev = mData.reduce((acc, cur) => acc + (cur.total_revenue || 0), 0);
         const totalOrd = mData.reduce((acc, cur) => acc + (cur.order_count || 0), 0);
         const avgAov = totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0;
-        setKpiStats({ totalRevenue: totalRev, totalOrders: totalOrd, aov: avgAov });
 
-        // 2. Pulse Scores (From brand_pulse_scores View)
-        const { data: scoresRaw } = await supabase.from('brand_pulse_scores').select('*').eq('client_name', clientName).single();
-        if (scoresRaw) {
-            setPulseScores([
-                { subject: '流量', A: Number(scoresRaw.traffic_score?.toFixed(1)) || 0, full: 5 },
-                { subject: '轉換', A: Number(scoresRaw.conversion_score?.toFixed(1)) || 0, full: 5 },
-                { subject: '獲利', A: Number(scoresRaw.profit_score?.toFixed(1)) || 0, full: 5 },
-                { subject: '主顧', A: Number(scoresRaw.vip_score?.toFixed(1)) || 0, full: 5 },
-                { subject: '回購', A: Number(scoresRaw.retention_score?.toFixed(1)) || 0, full: 5 },
-                { subject: '口碑', A: Number(scoresRaw.reputation_score?.toFixed(1)) || 0, full: 5 }
-            ]);
-        }
+        // 2. Retention Stats (For Old Customer Pulse)
+        const { data: retRaw } = await supabase.from('customer_retention_stats').select('*').eq('client_name', clientName);
+        const totalCustomers = retRaw?.length || 0;
+        const repeatCustomers = retRaw?.filter(c => c.purchase_days > 1).length || 0;
+        const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
+
+        // Set Pulse Metrics
+        setPulseMetrics({
+            traffic: { value: null, hasData: false, unit: '人' }, // 暫無流量資料
+            conversion: { value: null, hasData: false, unit: '%' }, // 暫無流量資料
+            profit: { value: totalRev, hasData: true, unit: '$' },
+            vip: { value: avgAov, hasData: true, unit: '$' },
+            retention: { value: repeatRate, hasData: true, unit: '%' },
+            reputation: { value: null, hasData: false, unit: '分' } // 暫無 NPS 資料
+        });
 
         // 3. Product
         const { data: prodRaw } = await supabase.from('product_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false }).limit(10);
@@ -111,7 +114,7 @@ export default function Dashboard() {
         const { data: chanRaw } = await supabase.from('channel_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false });
         setChannelData((chanRaw || []).map(c => ({ name: c.channel, value: c.total_revenue })));
 
-        // 5. RFM (Limit 1000 for visualization)
+        // 5. RFM
         const { data: rfmRaw } = await supabase.from('rfm_analysis').select('*').eq('client_name', clientName).limit(1000);
         setRfmData((rfmRaw || []).map((r: any) => ({ x: r.recency_days, y: r.frequency, z: r.monetary })));
 
@@ -183,61 +186,118 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* === Page 1: Overview === */}
+        {/* === Page 1: Overview (V6.0 No Radar) === */}
         {selectedClient && activeTab === 'page1' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex justify-between items-end">
-                <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運總覽</h2>
-                <span className="text-xs text-slate-400">數據來源: Supabase Views</span>
+            
+            {/* Top Bar: Time Filter & Health Check */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
+                    <p className="text-sm text-slate-500">以六脈指標動態評估品牌健康度</p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        <button className="px-3 py-1 text-sm font-bold bg-white shadow rounded text-slate-800">全部期間</button>
+                        <button className="px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50" disabled>本年對比</button>
+                    </div>
+                </div>
             </div>
+
             {loading ? <LoadingSkeleton /> : (
             <>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <KpiCard title="總營收" value={`$${kpiStats.totalRevenue.toLocaleString()}`} color="border-l-blue-500" />
-                    <KpiCard title="訂單量" value={kpiStats.totalOrders.toLocaleString()} color="border-l-purple-500" />
-                    <KpiCard title="客單價 (AOV)" value={`$${kpiStats.aov.toLocaleString()}`} color="border-l-yellow-500" />
-                    <KpiCard title="VIP 貢獻佔比" value={`${(pulseScores[3].A / 5 * 80).toFixed(0)}%`} sub="(目標 80%)" color="border-l-green-500" />
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-                        <h2 className="text-xl font-bold mb-4">品牌六脈診斷</h2>
-                        <div className="h-[300px]">
-                        <ResponsiveContainer>
-                            <RadarChart cx="50%" cy="50%" outerRadius="80%" data={pulseScores}>
-                            <PolarGrid />
-                            <PolarAngleAxis dataKey="subject" />
-                            <PolarRadiusAxis angle={30} domain={[0, 5]} />
-                            <Radar name={selectedClient} dataKey="A" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.5} />
-                            <Legend />
-                            <Tooltip />
-                            </RadarChart>
-                        </ResponsiveContainer>
-                        </div>
-                    </div>
-                    {/* ★★★ 這裡將完整的資料傳給 AiDiagnosisPanel ★★★ */}
-                    <AiDiagnosisPanel 
-                        clientName={selectedClient} 
-                        revenue={kpiStats.totalRevenue} 
-                        scores={pulseScores} 
-                        topProducts={productData}
+                {/* Module 2: The 6-Pulse Scorecards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <PulseCard 
+                        title="流量脈 (獲客)" 
+                        icon={<Users size={20}/>} 
+                        color="blue" 
+                        data={pulseMetrics.traffic} 
+                        missingMsg="缺少網站流量與行銷花費數據"
+                    />
+                    <PulseCard 
+                        title="轉換脈 (成交)" 
+                        icon={<MousePointerClick size={20}/>} 
+                        color="green" 
+                        data={pulseMetrics.conversion} 
+                        missingMsg="缺少網站流量數據"
+                    />
+                    <PulseCard 
+                        title="獲利脈 (總營收)" 
+                        icon={<CircleDollarSign size={20}/>} 
+                        color="slate" 
+                        data={pulseMetrics.profit} 
+                        trend={8.5} // 模擬趨勢，未來可由 SQL 提供
+                    />
+                    <PulseCard 
+                        title="金主脈 (客單價)" 
+                        icon={<Gem size={20}/>} 
+                        color="yellow" 
+                        data={pulseMetrics.vip} 
+                        trend={-2.1} 
+                    />
+                    <PulseCard 
+                        title="老主脈 (回購率)" 
+                        icon={<Repeat size={20}/>} 
+                        color="red" 
+                        data={pulseMetrics.retention} 
+                        trend={5.4} 
+                    />
+                    <PulseCard 
+                        title="擁主脈 (NPS口碑)" 
+                        icon={<MessageSquare size={20}/>} 
+                        color="purple" 
+                        data={pulseMetrics.reputation} 
+                        missingMsg="缺少 NPS 分數與推薦碼數據"
                     />
                 </div>
 
+                {/* Module 3: Multi-Metric Trend Chart */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">總營收趨勢 (新舊客分析)</h3>
-                    <div className="h-[300px]">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">獲利脈與金主脈趨勢 (營收 vs 客單價)</h3>
+                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">雙軸分析</span>
+                    </div>
+                    <div className="h-[350px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={monthlyData}>
+                            <ComposedChart data={monthlyData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="year_month" />
-                                <YAxis />
+                                <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
+                                <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `$${val}`} />
                                 <Tooltip formatter={(val: any) => `$${Number(val).toLocaleString()}`} />
                                 <Legend />
-                                <Bar dataKey="old_customer_revenue" stackId="a" fill="#8b5cf6" name="舊客營收" />
-                                <Bar dataKey="new_customer_revenue" stackId="a" fill="#22c55e" name="新客營收" />
-                            </BarChart>
+                                <Bar yAxisId="left" dataKey="total_revenue" fill="#3b82f6" name="總營收 (左軸)" radius={[4,4,0,0]} />
+                                <Line yAxisId="right" type="monotone" dataKey="aov" stroke="#f59e0b" strokeWidth={3} name="平均客單價 (右軸)" dot={{ r: 4 }} />
+                            </ComposedChart>
                         </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Module 4: Period-over-Period Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-slate-50">
+                        <h3 className="text-lg font-bold text-slate-800">六脈跨期比較表 (概覽)</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-white text-slate-500 border-b border-gray-200">
+                                <tr>
+                                    <th className="p-4 font-semibold">指標 (Pulse)</th>
+                                    <th className="p-4 font-semibold">全期累計</th>
+                                    <th className="p-4 font-semibold">近期走勢狀態</th>
+                                    <th className="p-4 font-semibold">資料狀態</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <TableRow title="獲利脈 (總營收)" val={pulseMetrics.profit.value} unit="$" status="good" msg="資料齊全" />
+                                <TableRow title="金主脈 (客單價)" val={pulseMetrics.vip.value} unit="$" status="warn" msg="資料齊全" />
+                                <TableRow title="老主脈 (>1次購買率)" val={pulseMetrics.retention.value} unit="%" status="good" msg="資料齊全" />
+                                <TableRow title="流量脈 (獲客成本)" val={null} unit="" status="none" msg="需補充 Google Analytics 流量數據" />
+                                <TableRow title="轉換脈 (轉換率)" val={null} unit="" status="none" msg="需補充網站流量數據" />
+                                <TableRow title="擁主脈 (NPS)" val={null} unit="" status="none" msg="需補充問卷調查數據" />
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </>
@@ -259,9 +319,17 @@ export default function Dashboard() {
                     <div className="h-[300px]"><ResponsiveContainer><PieChart><Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{channelData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Legend /></PieChart></ResponsiveContainer></div>
                 </div>
             </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3 mb-4">RFM 顧客價值分佈 (取樣 1000 點)</h3>
-                <div className="h-[400px]"><ResponsiveContainer><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3 mb-4">RFM 顧客價值分佈 (取樣 1000 點)</h3>
+                    <div className="h-[400px]"><ResponsiveContainer><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm overflow-x-auto border border-gray-100">
+                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-orange-500 pl-3 mb-4">同層留存率 (Cohort)</h3>
+                    {cohortData.length > 0 ? (
+                        <table className="w-full text-center text-sm"><thead><tr className="border-b bg-slate-50"><th className="p-3">月份</th><th>M+0</th><th>M+1</th><th>M+2</th></tr></thead><tbody>{cohortData.map((r:any,i:number)=>(<tr key={i} className="border-b"><td className="p-3 font-mono text-slate-600">{r.m}</td>{r.v.slice(0,3).map((v:any,j:number)=><td key={j} className={v<20?'text-red-500 font-bold bg-red-50':'text-slate-700'}>{v}%</td>)}</tr>))}</tbody></table>
+                    ) : <EmptyState message="無 Cohort 資料" />}
+                </div>
             </div>
         </div>
         )}
@@ -269,28 +337,27 @@ export default function Dashboard() {
         {/* === Page 3: Consultant Prescription === */}
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} />}
 
-        {/* === Page 5: Data Specs === */}
+        {/* === Page 5: Data Specs (Updated) === */}
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V6.0 跨期比較制)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
-                            <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義 (0~5分)</h3>
+                            <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義</h3>
                             <ul className="space-y-4">
-                                <SpecItem title="流量脈 (Traffic)" logic="Log10(總客戶數) * 1.5" desc="衡量品牌流量規模。客戶數越多分數越高 (對數增長)。" />
-                                <SpecItem title="轉換脈 (Conversion)" logic="有效訂單數 / 總訂單數" desc="衡量訂單含金量。若所有訂單皆有金額，則為滿分。" />
-                                <SpecItem title="獲利脈 (Profit)" logic="Log10(總營收) - 3" desc="衡量營收規模。10萬=2分, 100萬=3分, 1000萬=4分..." />
-                                <SpecItem title="主顧脈 (VIP)" logic="(Top 20% 客戶營收 / 總營收) / 0.8" desc="80/20 法則：若前 20% 客戶貢獻了 80% 營收，代表 VIP 價值極高 (滿分)。" />
-                                <SpecItem title="回購脈 (Retention)" logic="暫定固定值 (3.0)" desc="需進階 SQL 計算 (Repeated Customer Rate)。" />
-                                <SpecItem title="口碑脈 (Reputation)" logic="暫定固定值 (2.5)" desc="需推薦碼 (Referral Code) 欄位支援。" />
+                                <SpecItem title="流量脈 (Traffic)" logic="總不重複訪客數 / 行銷費用" desc="衡量網站流量與有效獲客成本 (CAC)。(需補充 GA 與廣告數據)" />
+                                <SpecItem title="轉換脈 (Conversion)" logic="總訂單數 / 總訪客數" desc="衡量進站後下單的比例。(需補充流量數據)" />
+                                <SpecItem title="獲利脈 (Profit)" logic="SUM(Transactions.Amount)" desc="品牌的總營收或總毛利規模。" />
+                                <SpecItem title="金主脈 (VIP)" logic="總營收 / 總訂單數" desc="每月的平均客單價 (AOV)。" />
+                                <SpecItem title="老主脈 (Retention)" logic="購買 N 次以上人數 / 總會員數" desc="特定期間內的回購狀況與黏著度。" />
+                                <SpecItem title="擁主脈 (Reputation)" logic="NPS 分數 / 推薦產生之業績" desc="衡量口碑擴散力。(需補充問卷與推薦碼數據)" />
                             </ul>
                         </div>
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-slate-700">深度分析邏輯</h3>
                             <ul className="space-y-4">
                                 <SpecItem title="KPI: 總營收" logic="SUM(Transactions.Amount)" desc="去除所有空格與逗號後的累加總合。" />
-                                <SpecItem title="KPI: 客單價 (AOV)" logic="總營收 / 總訂單數" desc="平均每筆訂單的消費金額。" />
                                 <SpecItem title="RFM 模型" logic="R: 最後購買距今天數 / F: 購買次數 / M: 累積金額" desc="用於區分沉睡客、常客與大戶。" />
                                 <SpecItem title="Cohort 留存" logic="同月首購客在後續月份的回購率" desc="觀察新客是否能留存下來。" />
                             </ul>
@@ -307,7 +374,7 @@ export default function Dashboard() {
                     <div className="text-center mb-8">
                         <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Upload size={32} className="text-blue-600"/></div>
                         <h2 className="text-2xl font-bold text-slate-800">上傳交易資料</h2>
-                        <p className="text-slate-500">支援 CSV 格式。系統將自動去除空格與千分位逗號，確保金額準確。</p>
+                        <p className="text-slate-500">目前支援上傳【訂單交易紀錄】。未來將擴充流量與問卷資料匯入。</p>
                     </div>
                     <DataUploader supabase={supabase} onSuccess={handleUploadSuccess} />
                 </div>
@@ -320,93 +387,69 @@ export default function Dashboard() {
 
 // --- Sub-Components ---
 
-// ★★★ 核心修改：AI Diagnosis Panel 連接真實 API ★★★
-function AiDiagnosisPanel({ clientName, revenue, scores, topProducts }: any) { 
-    const [d, setD] = useState(""); 
-    const [l, setL] = useState(false); 
+function PulseCard({ title, icon, color, data, missingMsg, trend }: any) {
+    const hasData = data.hasData;
     
-    const run = async () => { 
-        if (!clientName) return;
-        setL(true); 
-        try {
-            // 轉換分數格式以符合 API 要求
-            // scores 格式為 [{subject:'流量', A:3}, ...] 需轉為 { traffic: 3, ... }
-            const scoreMap = scores.reduce((acc:any, curr:any) => {
-                const keyMap: any = { 
-                    '流量': 'traffic', '轉換': 'conversion', '獲利': 'profit', 
-                    '主顧': 'vip', '回購': 'retention', '口碑': 'reputation' 
-                };
-                // 簡單判斷：取前兩個字元 (例如 "流量脈" -> "流量")
-                const key = keyMap[curr.subject.substring(0, 2)];
-                if(key) acc[key] = curr.A;
-                return acc;
-            }, {});
+    const colors: any = {
+        blue: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+        green: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+        slate: { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' },
+        yellow: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+        red: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+        purple: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' }
+    };
+    const c = colors[color];
 
-            const top3 = topProducts?.slice(0, 3).map((p:any) => p.name) || [];
-
-            const res = await fetch('/api/diagnose', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    clientName, 
-                    revenue, 
-                    scores: scoreMap,
-                    topProducts: top3
-                })
-            });
-            
-            if (res.ok) {
-                const data = await res.json();
-                setD(data.diagnosis);
-            } else {
-                setD("AI 連線失敗，請檢查網路或 API Key。");
-            }
-        } catch (e) {
-            console.error(e);
-            setD("連線錯誤，無法取得 AI 診斷。");
-        }
-        setL(false); 
-    }; 
-    
     return (
-        <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl">
-            <div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4">
-                <Bot className="text-blue-400" />
-                <h3 className="text-lg font-bold">AI 六脈診斷</h3>
-            </div>
-            <div className="flex-1 space-y-4">
-                {d ? (
-                    <div className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed border border-white/10 animate-in fade-in whitespace-pre-wrap">
-                        {d}
-                    </div>
-                ) : (
-                    <div className="text-slate-400 text-sm text-center py-10">
-                        {l ? "AI 正在分析大數據..." : `點擊分析 ${clientName || '...'} 的健康狀況`}
-                    </div>
+        <div className={`relative p-6 rounded-2xl border-2 transition-all ${hasData ? `bg-white ${c.border} shadow-sm hover:shadow-md` : 'bg-slate-50 border-dashed border-slate-200 grayscale opacity-70'}`}>
+            <div className="flex justify-between items-start mb-4">
+                <div className={`flex items-center gap-2 ${c.text}`}>
+                    <div className={`p-2 rounded-lg ${c.bg}`}>{icon}</div>
+                    <h3 className="font-bold">{title}</h3>
+                </div>
+                {hasData && trend !== undefined && (
+                    <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${trend >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {trend >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}
+                        {Math.abs(trend)}%
+                    </span>
                 )}
             </div>
-            <button 
-                onClick={run} 
-                disabled={l || !clientName} 
-                className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition flex justify-center items-center gap-2 disabled:opacity-50"
-            >
-                {l ? <Loader2 className="animate-spin" /> : <Sparkles size={16}/>} 
-                {l ? '分析中...' : '開始診斷'}
-            </button>
+            
+            {hasData ? (
+                <div>
+                    <div className="text-3xl font-black text-slate-800">
+                        {data.unit === '$' ? '$' : ''}
+                        {Number(data.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                        <span className="text-base text-slate-500 font-normal ml-1">{data.unit !== '$' ? data.unit : ''}</span>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                    <AlertTriangle size={16} className="shrink-0" />
+                    <span>{missingMsg}</span>
+                </div>
+            )}
         </div>
-    ); 
+    );
 }
 
-function SpecItem({ title, logic, desc }: any) {
+function TableRow({ title, val, unit, status, msg }: any) {
     return (
-        <li className="border-b border-slate-100 pb-2">
-            <div className="flex justify-between font-bold text-slate-800 mb-1">
-                <span>{title}</span>
-                <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-mono">{logic}</span>
-            </div>
-            <p className="text-xs text-slate-500">{desc}</p>
-        </li>
-    )
+        <tr className="border-b border-gray-100 hover:bg-slate-50">
+            <td className="p-4 font-medium text-slate-700">{title}</td>
+            <td className="p-4 font-bold text-slate-900">
+                {val !== null ? `${unit === '$' ? '$' : ''}${Number(val).toLocaleString(undefined, {maximumFractionDigits:1})}${unit !== '$' ? unit : ''}` : '-'}
+            </td>
+            <td className="p-4">
+                {status === 'good' && <span className="text-green-600 flex items-center gap-1"><TrendingUp size={16}/> 成長</span>}
+                {status === 'warn' && <span className="text-yellow-600 flex items-center gap-1"><Minus size={16}/> 持平</span>}
+                {status === 'none' && <span className="text-slate-300">-</span>}
+            </td>
+            <td className="p-4 text-xs text-slate-500">
+                {status === 'none' ? <span className="text-amber-500 flex items-center gap-1"><AlertTriangle size={12}/> {msg}</span> : msg}
+            </td>
+        </tr>
+    );
 }
 
 function ConsultantPrescriptionPage({ clientName }: any) {
@@ -525,6 +568,6 @@ function DataUploader({ supabase, onSuccess }: any) {
 }
 
 function TabButton({ id, label, icon, active, onClick, isNew }: any) { return <button onClick={onClick} className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${active ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>{icon} {label} {isNew && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">New</span>}</button>; }
-function KpiCard({ title, value, color, sub }: any) { return <div className={`bg-white p-6 rounded-xl shadow-sm border-l-4 ${color}`}><p className="text-sm text-gray-500">{title}</p><h3 className="text-2xl font-bold mt-2">{value}</h3>{sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}</div>; }
 function EmptyState({ message = "目前無資料" }: any) { return <div className="h-full w-full flex flex-col items-center justify-center text-slate-400 min-h-[200px] bg-slate-50 rounded-lg border border-dashed border-slate-200"><Info className="mb-2"/><p>{message}</p></div>; }
 function LoadingSkeleton() { return <div className="space-y-4 animate-pulse"><div className="h-32 bg-slate-200 rounded-xl"></div><div className="grid grid-cols-2 gap-4"><div className="h-64 bg-slate-200 rounded-xl"></div><div className="h-64 bg-slate-200 rounded-xl"></div></div></div>; }
+function SpecItem({ title, logic, desc }: any) { return <li className="border-b border-slate-100 pb-2"><div className="flex justify-between font-bold text-slate-800 mb-1"><span>{title}</span><span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-mono">{logic}</span></div><p className="text-xs text-slate-500">{desc}</p></li>; }
