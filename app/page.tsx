@@ -40,7 +40,6 @@ export default function Dashboard() {
   
   // Data States
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
-  const [gaData, setGaData] = useState<any[]>([]); // 存放 GA 流量數據
   const [productData, setProductData] = useState<any[]>([]);
   const [channelData, setChannelData] = useState<any[]>([]);
   const [rfmData, setRfmData] = useState<any[]>([]);
@@ -68,7 +67,6 @@ export default function Dashboard() {
 
   const fetchClients = async () => {
     try {
-        // 同時從交易表和 GA 表抓取客戶名稱，聯集起來
         const [{ data: txData }, { data: gaDataRes }] = await Promise.all([
             supabase.from('monthly_brand_pulse').select('client_name'),
             supabase.from('monthly_ga_metrics').select('client_name')
@@ -105,24 +103,22 @@ export default function Dashboard() {
         const repeatCustomers = retRaw?.filter(c => c.purchase_days > 1).length || 0;
         const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
 
-        // 3. GA Metrics (New!)
+        // 3. GA Metrics
         const { data: gaRaw } = await supabase.from('monthly_ga_metrics').select('*').eq('client_name', clientName).order('year_month', { ascending: true });
-        setGaData(gaRaw || []);
         
-        const totalActiveUsers = (gaRaw || []).reduce((acc, cur) => acc + (cur.total_active_users || 0), 0);
-        const totalAppointments = (gaRaw || []).reduce((acc, cur) => acc + (cur.total_appointments || 0), 0);
-        const totalLeads = (gaRaw || []).reduce((acc, cur) => acc + (cur.total_leads || 0), 0);
+        const totalActiveUsers = (gaRaw || []).reduce((acc, cur) => acc + (Number(cur.total_active_users) || 0), 0);
+        const totalAppointments = (gaRaw || []).reduce((acc, cur) => acc + (Number(cur.total_appointments) || 0), 0);
+        const totalLeads = (gaRaw || []).reduce((acc, cur) => acc + (Number(cur.total_leads) || 0), 0);
         const totalConversions = totalAppointments + totalLeads;
         const overallConversionRate = totalActiveUsers > 0 ? (totalConversions / totalActiveUsers) * 100 : null;
 
-        // 統整 六脈 KPI (結合 TX 與 GA)
         setPulseMetrics({
             traffic: { value: totalActiveUsers > 0 ? totalActiveUsers : null, hasData: totalActiveUsers > 0, unit: '人' }, 
             conversion: { value: overallConversionRate, hasData: overallConversionRate !== null, unit: '%' }, 
             profit: { value: totalRev, hasData: totalRev > 0, unit: '$' },
             vip: { value: avgAov, hasData: avgAov > 0, unit: '$' },
             retention: { value: repeatRate, hasData: totalCustomers > 0, unit: '%' },
-            reputation: { value: null, hasData: false, unit: '分' } // 暫缺 NPS
+            reputation: { value: null, hasData: false, unit: '分' }
         });
 
         // 4. Product & Channel
@@ -145,9 +141,9 @@ export default function Dashboard() {
         let others = { name: '其他一般客', count: 0, rev: 0, fill: '#cbd5e1' };
 
         let nes = {
-            N: { name: 'N: 新客 (<120天首購)', count: 0, fill: '#3b82f6' },
-            E: { name: 'E: 既有活躍客 (近期回購)', count: 0, fill: '#10b981' },
-            S: { name: 'S: 沉睡客 (>200天未見)', count: 0, fill: '#ef4444' }
+            N: { name: 'N: 新客 (<120天)', count: 0, fill: '#3b82f6' },
+            E: { name: 'E: 活躍客 (回購)', count: 0, fill: '#10b981' },
+            S: { name: 'S: 沉睡客 (>200天)', count: 0, fill: '#ef4444' }
         };
 
         fullRfm.forEach((c: any) => {
@@ -259,7 +255,7 @@ export default function Dashboard() {
             <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <PulseCard title="流量脈 (總訪客)" icon={<Users size={20}/>} color="blue" data={pulseMetrics.traffic} missingMsg="缺少網站流量數據 (GA)" trend={null} />
-                    <PulseCard title="轉換脈 (成交率)" icon={<MousePointerClick size={20}/>} color="green" data={pulseMetrics.conversion} missingMsg="缺少網站流量數據 (GA)" trend={null} />
+                    <PulseCard title="轉換脈 (留單率)" icon={<MousePointerClick size={20}/>} color="green" data={pulseMetrics.conversion} missingMsg="缺少網站流量數據 (GA)" trend={null} />
                     <PulseCard title="獲利脈 (總營收)" icon={<CircleDollarSign size={20}/>} color="slate" data={pulseMetrics.profit} trend={null} />
                     <PulseCard title="金主脈 (客單價)" icon={<Gem size={20}/>} color="yellow" data={pulseMetrics.vip} trend={null} />
                     <PulseCard title="老主脈 (回購率)" icon={<Repeat size={20}/>} color="red" data={pulseMetrics.retention} trend={null} />
@@ -273,7 +269,8 @@ export default function Dashboard() {
                             <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">堆疊圖</span>
                         </div>
                         <div className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
+                            {/* minWidth={1} 消滅 Recharts height(-1) warning */}
+                            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                 <ComposedChart data={monthlyData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
@@ -324,25 +321,46 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* === Page 2 & 3 & 5 (省略部分以符合長度，內容與 V7 一致) === */}
+        {/* === Page 2: Deep Analysis === */}
         {selectedClient && activeTab === 'page2' && (
           <div className="space-y-6 animate-in fade-in">
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
+            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3">NES 顧客生命週期</h3><span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">N=新, E=活, S=睡</span></div>
-                    <div className="h-[250px]"><ResponsiveContainer><BarChart data={nesData} layout="vertical" margin={{ left: 40 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={120} tick={{fontSize: 11}} /><Tooltip formatter={(val:any) => `${val.toLocaleString()} 人`} /><Bar dataKey="count" radius={[0, 4, 4, 0]}>{nesData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}</Bar></BarChart></ResponsiveContainer></div>
+                    <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><BarChart data={nesData} layout="vertical" margin={{ left: 40 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={120} tick={{fontSize: 11}} /><Tooltip formatter={(val:any) => `${val.toLocaleString()} 人`} /><Bar dataKey="count" radius={[0, 4, 4, 0]}>{nesData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}</Bar></BarChart></ResponsiveContainer></div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-slate-800 border-l-4 border-yellow-500 pl-3">RFM 分群營收貢獻</h3><span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">誰是您的金雞母？</span></div>
-                    <div className="h-[250px]"><ResponsiveContainer><PieChart><Pie data={rfmSegments} dataKey="rev" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{rfmSegments.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /></PieChart></ResponsiveContainer></div>
+                    <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><PieChart><Pie data={rfmSegments} dataKey="rev" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{rfmSegments.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /></PieChart></ResponsiveContainer></div>
                 </div>
             </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold text-slate-800 border-l-4 border-slate-500 pl-3 mb-4">RFM 原始散佈圖 (取樣 1000 點)</h3>
-                <div className="h-[300px]"><ResponsiveContainer><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-green-500 pl-3 mb-4">熱銷品項排行 (Top 10)</h3>
+                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><BarChart layout="vertical" data={productData}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} /><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} name="銷售額" /></BarChart></ResponsiveContainer></div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-purple-500 pl-3 mb-4">通路成效分析</h3>
+                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><PieChart><Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{channelData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Legend /></PieChart></ResponsiveContainer></div>
+                </div>
             </div>
-          </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-slate-500 pl-3 mb-4">RFM 原始散佈圖 (取樣 1000 點)</h3>
+                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm overflow-x-auto border border-gray-100">
+                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-orange-500 pl-3 mb-4">同層留存率 (Cohort)</h3>
+                    {cohortData.length > 0 ? (
+                        <table className="w-full text-center text-sm"><thead><tr className="border-b bg-slate-50"><th className="p-3">月份</th><th>M+0</th><th>M+1</th><th>M+2</th></tr></thead><tbody>{cohortData.map((r:any,i:number)=>(<tr key={i} className="border-b"><td className="p-3 font-mono text-slate-600">{r.m}</td>{r.v.slice(0,3).map((v:any,j:number)=><td key={j} className={v<20?'text-red-500 font-bold bg-red-50':'text-slate-700'}>{v}%</td>)}</tr>))}</tbody></table>
+                    ) : <EmptyState message="無 Cohort 資料" />}
+                </div>
+            </div>
+        </div>
         )}
 
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} rfmSegments={rfmSegments} nesData={nesData} />}
@@ -350,12 +368,12 @@ export default function Dashboard() {
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V8.0 行銷擴充版)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V9.0 行銷擴充版)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義</h3>
                             <ul className="space-y-4">
-                                <SpecItem title="流量脈 (Traffic)" logic="總活躍使用者 / 總行銷費用" desc="衡量網站流量與獲客成本。 🚩 註：請在上傳 GA 數據時，於未來加入行銷費用(Marketing Spend)以優化此指標。" />
+                                <SpecItem title="流量脈 (Traffic)" logic="總活躍使用者 / 總行銷費用" desc="衡量網站流量與獲客成本。 🚩 註：請在上傳 GA 數據時，於未來加入行銷費用(Marketing Spend)以計算 ROI。" />
                                 <SpecItem title="轉換脈 (Conversion)" logic="(預約數 + 名單數) / 總活躍使用者" desc="衡量進站後成功留單的比率。" />
                                 <SpecItem title="獲利脈 (Profit)" logic="SUM(Transactions.Amount)" desc="品牌的總營收。" />
                                 <SpecItem title="金主脈 (VIP)" logic="總營收 / 總訂單數" desc="每月的平均客單價 (AOV)。" />
@@ -367,7 +385,7 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* === Page 4: Upload (V8.0 支援雙模模式) === */}
+        {/* === Page 4: Upload (V9.0 絕對防呆提示) === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in">
                 <div className="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
@@ -505,7 +523,7 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
     );
 }
 
-// ★★★ 核心修改：DataUploader 支援兩種上傳模式 (TX 與 GA) ★★★
+// ★★★ 核心修改：DataUploader 加入強力警示防呆機制 ★★★
 function DataUploader({ supabase, onSuccess }: any) { 
     const [uploading, setUploading] = useState(false); 
     const [clientName, setClientName] = useState("");
@@ -524,10 +542,10 @@ function DataUploader({ supabase, onSuccess }: any) {
             header: true, 
             skipEmptyLines: true, 
             complete: async (results) => { 
+                let cleanRows: any[] = [];
                 
                 if (uploadType === 'tx') {
-                    // --- 處理交易紀錄 ---
-                    const cleanRows = results.data.map((row: any) => {
+                    cleanRows = results.data.map((row: any) => {
                         const rawAmount = row['金額'] || row['amount'] || '0';
                         const amount = parseFloat(rawAmount.toString().replace(/[\s,]/g, ''));
                         let dateStr = row['購買日期'] || row['order_date'];
@@ -538,24 +556,12 @@ function DataUploader({ supabase, onSuccess }: any) {
                             amount: isNaN(amount) ? 0 : amount, 
                             product_name: row['購買品項'] || row['product_name'], 
                             channel: row['通路'] || row['channel'] || 'EC',
-                            client_name: clientName
+                            client_name: clientName,
+                            user_id: null 
                         };
                     }).filter((r:any) => !isNaN(r.amount) && r.customer_id); 
-                    
-                    setMsg(`清洗完成，寫入 ${cleanRows.length} 筆交易資料...`);
-                    const BATCH_SIZE = 1000; 
-                    try {
-                        for (let i = 0; i < cleanRows.length; i += BATCH_SIZE) { 
-                            const { error } = await supabase.from('transactions').insert(cleanRows.slice(i, i + BATCH_SIZE)); 
-                            if(error) throw error;
-                        } 
-                        setUploading(false); onSuccess(clientName);
-                    } catch (error: any) { console.error(error); setMsg("上傳失敗: " + error.message); setUploading(false); }
-
                 } else if (uploadType === 'ga') {
-                    // --- 處理 GA 流量紀錄 ---
-                    const cleanRows = results.data.map((row: any) => {
-                        // 解析 "2025.1月_婚禮喜餅" -> "2025-01"
+                    cleanRows = results.data.map((row: any) => {
                         const periodRaw = row['期間'] || '';
                         let yearMonth = '';
                         let category = 'Uncategorized';
@@ -568,7 +574,6 @@ function DataUploader({ supabase, onSuccess }: any) {
                             category = match[3];
                         }
                         
-                        // 清洗千分位逗號
                         const cleanNum = (val: string) => parseInt((val || '0').toString().replace(/,/g, ''), 10) || 0;
 
                         return {
@@ -580,17 +585,39 @@ function DataUploader({ supabase, onSuccess }: any) {
                             new_users: cleanNum(row['新使用者']),
                             appointments: cleanNum(row['當月預約數_婚禮/彌月']),
                             leads: cleanNum(row['當月名單數_節慶']),
-                            marketing_spend: 0 // 預留欄位
+                            marketing_spend: 0
                         };
                     }).filter((r:any) => r.year_month !== '');
+                }
 
-                    setMsg(`清洗完成，寫入 ${cleanRows.length} 筆 GA 數據...`);
-                    try {
-                        // 寫入 ga_analytics 表
-                        const { error } = await supabase.from('ga_analytics').insert(cleanRows);
+                // 🔴 強力防呆：如果過濾完一筆資料都沒有
+                if (cleanRows.length === 0) {
+                    alert(`❌ 解析失敗！沒有找到任何有效資料。\n\n請確認：\n1. 您是否上傳了錯誤的檔案？\n2. 上方按鈕是否選錯？（您目前選擇的是【${uploadType === 'tx' ? '交易訂單' : 'GA流量'}】上傳模式）`);
+                    setUploading(false);
+                    setMsg("");
+                    e.target.value = '';
+                    return;
+                }
+                
+                setMsg(`清洗完成，寫入 ${cleanRows.length} 筆資料...`);
+                const BATCH_SIZE = 1000; 
+                try {
+                    const targetTable = uploadType === 'tx' ? 'transactions' : 'ga_analytics';
+                    for (let i = 0; i < cleanRows.length; i += BATCH_SIZE) { 
+                        const { error } = await supabase.from(targetTable).insert(cleanRows.slice(i, i + BATCH_SIZE)); 
                         if(error) throw error;
-                        setUploading(false); onSuccess(clientName);
-                    } catch (error: any) { console.error(error); setMsg("GA上傳失敗: " + error.message); setUploading(false); }
+                    } 
+                    setMsg("上傳成功！");
+                    setUploading(false); 
+                    e.target.value = '';
+                    onSuccess(clientName);
+                } catch (error: any) { 
+                    console.error(error); 
+                    // 🔴 強力防呆：如果資料庫寫入失敗 (例如忘記建立 Table)
+                    alert(`❌ 資料庫寫入失敗！\n\n錯誤訊息：${error.message}\n\n👉 提示：請確認您是否已經在 Supabase 執行了對應的 SQL 建表指令。`);
+                    setUploading(false); 
+                    setMsg("");
+                    e.target.value = '';
                 }
             } 
         }); 
@@ -609,7 +636,7 @@ function DataUploader({ supabase, onSuccess }: any) {
                 <div className="flex flex-col items-center gap-3">
                     {uploading ? <Loader2 className="animate-spin w-10 h-10 text-slate-400"/> : <FileUp size={48} className={uploadType === 'tx' ? 'text-blue-500' : 'text-green-500'}/>}
                     <span className="font-bold text-slate-700 text-lg">{uploading ? msg : `點擊上傳 ${uploadType === 'tx' ? '交易' : 'GA'} CSV`}</span>
-                    {uploadType === 'ga' && <p className="text-xs text-green-600 bg-green-100 px-3 py-1 rounded-full mt-2">🚩 未來版本支援：請確保檔案含有「行銷花費」以計算 ROI</p>}
+                    {uploadType === 'ga' && <p className="text-xs text-green-600 bg-green-100 px-3 py-1 rounded-full mt-2">🚩 請確保您已經在 Supabase 執行 V9 提供的 SQL 語法</p>}
                 </div>
             </div>
         </div>
