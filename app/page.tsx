@@ -128,7 +128,7 @@ export default function Dashboard() {
         const { data: chanRaw } = await supabase.from('channel_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false });
         setChannelData((chanRaw || []).map(c => ({ name: c.channel, value: c.total_revenue })));
 
-        // 5. RFM & NES 運算
+        // 5. RFM & NES
         const { data: rfmRaw } = await supabase.from('rfm_analysis').select('*').eq('client_name', clientName);
         const fullRfm = rfmRaw || [];
         setRfmData(fullRfm.slice(0, 1000).map((r: any) => ({ x: r.recency_days, y: r.frequency, z: r.monetary })));
@@ -237,7 +237,6 @@ export default function Dashboard() {
         {/* === Page 1: Overview === */}
         {selectedClient && activeTab === 'page1' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-            
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
@@ -269,8 +268,8 @@ export default function Dashboard() {
                             <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">堆疊圖</span>
                         </div>
                         <div className="h-[300px]">
-                            {/* minWidth={1} 消滅 Recharts height(-1) warning */}
-                            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                            {/* 加入 minWidth=0 防護 Recharts warning */}
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                 <ComposedChart data={monthlyData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
@@ -283,13 +282,7 @@ export default function Dashboard() {
                             </ResponsiveContainer>
                         </div>
                     </div>
-                    <AiDiagnosisPanel 
-                        clientName={selectedClient} 
-                        revenue={pulseMetrics.profit.value} 
-                        rfmSegments={rfmSegments}
-                        nesData={nesData}
-                        topProducts={productData}
-                    />
+                    <AiDiagnosisPanel clientName={selectedClient} revenue={pulseMetrics.profit.value} rfmSegments={rfmSegments} nesData={nesData} topProducts={productData} />
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -325,33 +318,30 @@ export default function Dashboard() {
         {selectedClient && activeTab === 'page2' && (
           <div className="space-y-6 animate-in fade-in">
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
-            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3">NES 顧客生命週期</h3><span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">N=新, E=活, S=睡</span></div>
-                    <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><BarChart data={nesData} layout="vertical" margin={{ left: 40 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={120} tick={{fontSize: 11}} /><Tooltip formatter={(val:any) => `${val.toLocaleString()} 人`} /><Bar dataKey="count" radius={[0, 4, 4, 0]}>{nesData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}</Bar></BarChart></ResponsiveContainer></div>
+                    <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><BarChart data={nesData} layout="vertical" margin={{ left: 40 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={120} tick={{fontSize: 11}} /><Tooltip formatter={(val:any) => `${val.toLocaleString()} 人`} /><Bar dataKey="count" radius={[0, 4, 4, 0]}>{nesData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}</Bar></BarChart></ResponsiveContainer></div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-slate-800 border-l-4 border-yellow-500 pl-3">RFM 分群營收貢獻</h3><span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">誰是您的金雞母？</span></div>
-                    <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><PieChart><Pie data={rfmSegments} dataKey="rev" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{rfmSegments.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /></PieChart></ResponsiveContainer></div>
+                    <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><PieChart><Pie data={rfmSegments} dataKey="rev" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{rfmSegments.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /></PieChart></ResponsiveContainer></div>
                 </div>
             </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-green-500 pl-3 mb-4">熱銷品項排行 (Top 10)</h3>
-                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><BarChart layout="vertical" data={productData}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} /><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} name="銷售額" /></BarChart></ResponsiveContainer></div>
+                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><BarChart layout="vertical" data={productData}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} /><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} name="銷售額" /></BarChart></ResponsiveContainer></div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-purple-500 pl-3 mb-4">通路成效分析</h3>
-                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><PieChart><Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{channelData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Legend /></PieChart></ResponsiveContainer></div>
+                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><PieChart><Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{channelData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Legend /></PieChart></ResponsiveContainer></div>
                 </div>
             </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-slate-500 pl-3 mb-4">RFM 原始散佈圖 (取樣 1000 點)</h3>
-                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
+                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm overflow-x-auto border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-orange-500 pl-3 mb-4">同層留存率 (Cohort)</h3>
@@ -360,7 +350,7 @@ export default function Dashboard() {
                     ) : <EmptyState message="無 Cohort 資料" />}
                 </div>
             </div>
-        </div>
+          </div>
         )}
 
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} rfmSegments={rfmSegments} nesData={nesData} />}
@@ -368,7 +358,7 @@ export default function Dashboard() {
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V9.0 行銷擴充版)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V9.1)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義</h3>
@@ -385,7 +375,7 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* === Page 4: Upload (V9.0 絕對防呆提示) === */}
+        {/* === Page 4: Upload (V9.1 加入 BOM 破解與複製除錯區) === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in">
                 <div className="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
@@ -523,14 +513,16 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
     );
 }
 
-// ★★★ 核心修改：DataUploader 加入強力警示防呆機制 ★★★
+// ★★★ 核心修改：DataUploader 加入 BOM 破解與可複製除錯視窗 ★★★
 function DataUploader({ supabase, onSuccess }: any) { 
     const [uploading, setUploading] = useState(false); 
     const [clientName, setClientName] = useState("");
-    const [uploadType, setUploadType] = useState('tx'); // 'tx' | 'ga'
+    const [uploadType, setUploadType] = useState('tx'); 
     const [msg, setMsg] = useState(""); 
+    const [errorDetails, setErrorDetails] = useState(""); // ★ 存放可複製的錯誤訊息
     
     const handleFile = (e: any) => { 
+        setErrorDetails(""); // 重置錯誤狀態
         if (!clientName.trim()) { alert("請先輸入客戶名稱！"); e.target.value = ''; return; }
         const file = e.target.files[0]; 
         if (!file) return; 
@@ -541,6 +533,8 @@ function DataUploader({ supabase, onSuccess }: any) {
         Papa.parse(file, { 
             header: true, 
             skipEmptyLines: true, 
+            // ★★★ BOM 破解器：強制把標題裡的隱藏字元 (\uFEFF) 與前後空白洗掉 ★★★
+            transformHeader: (header) => header.replace(/^\uFEFF/, '').trim(),
             complete: async (results) => { 
                 let cleanRows: any[] = [];
                 
@@ -590,16 +584,27 @@ function DataUploader({ supabase, onSuccess }: any) {
                     }).filter((r:any) => r.year_month !== '');
                 }
 
-                // 🔴 強力防呆：如果過濾完一筆資料都沒有
+                // 🔴 防呆機制觸發
                 if (cleanRows.length === 0) {
-                    alert(`❌ 解析失敗！沒有找到任何有效資料。\n\n請確認：\n1. 您是否上傳了錯誤的檔案？\n2. 上方按鈕是否選錯？（您目前選擇的是【${uploadType === 'tx' ? '交易訂單' : 'GA流量'}】上傳模式）`);
+                    const debugInfo = `解析失敗！沒有找到有效資料。
+請確認：
+1. 是否上傳了錯誤的檔案？
+2. 上方按鈕是否選錯？(您目前選的是【${uploadType === 'tx' ? '交易訂單' : 'GA流量'}】)
+
+【系統讀取到的欄位名稱 (請檢查是否有錯字)】：
+${Object.keys(results.data[0] || {}).join(', ')}
+
+【系統讀取到的第一筆資料】：
+${JSON.stringify(results.data[0], null, 2)}`;
+                    
+                    setErrorDetails(debugInfo);
                     setUploading(false);
                     setMsg("");
                     e.target.value = '';
                     return;
                 }
                 
-                setMsg(`清洗完成，寫入 ${cleanRows.length} 筆資料...`);
+                setMsg(`清洗完成，準備寫入 ${cleanRows.length} 筆資料...`);
                 const BATCH_SIZE = 1000; 
                 try {
                     const targetTable = uploadType === 'tx' ? 'transactions' : 'ga_analytics';
@@ -607,14 +612,13 @@ function DataUploader({ supabase, onSuccess }: any) {
                         const { error } = await supabase.from(targetTable).insert(cleanRows.slice(i, i + BATCH_SIZE)); 
                         if(error) throw error;
                     } 
-                    setMsg("上傳成功！");
+                    setMsg("🎉 上傳成功！");
                     setUploading(false); 
                     e.target.value = '';
                     onSuccess(clientName);
                 } catch (error: any) { 
                     console.error(error); 
-                    // 🔴 強力防呆：如果資料庫寫入失敗 (例如忘記建立 Table)
-                    alert(`❌ 資料庫寫入失敗！\n\n錯誤訊息：${error.message}\n\n👉 提示：請確認您是否已經在 Supabase 執行了對應的 SQL 建表指令。`);
+                    setErrorDetails(`資料庫寫入失敗！請確認是否已在 Supabase 執行 SQL 建表指令。\n\n錯誤代碼：\n${error.message}`);
                     setUploading(false); 
                     setMsg("");
                     e.target.value = '';
@@ -627,8 +631,8 @@ function DataUploader({ supabase, onSuccess }: any) {
             <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="請輸入客戶名稱 (例如：CUPETIT)" className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"/>
             
             <div className="flex gap-4">
-                <button onClick={() => setUploadType('tx')} className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'tx' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>1. 交易訂單資料 (CSV)</button>
-                <button onClick={() => setUploadType('ga')} className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'ga' ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>2. GA 流量資料 (CSV)</button>
+                <button onClick={() => {setUploadType('tx'); setErrorDetails("");}} className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'tx' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>1. 交易訂單資料 (CSV)</button>
+                <button onClick={() => {setUploadType('ga'); setErrorDetails("");}} className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'ga' ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>2. GA 流量資料 (CSV)</button>
             </div>
 
             <div className={`border-2 border-dashed p-10 text-center cursor-pointer transition-all rounded-2xl relative ${uploadType === 'tx' ? 'border-blue-300 bg-blue-50/50 hover:bg-blue-50' : 'border-green-300 bg-green-50/50 hover:bg-green-50'}`}>
@@ -636,9 +640,22 @@ function DataUploader({ supabase, onSuccess }: any) {
                 <div className="flex flex-col items-center gap-3">
                     {uploading ? <Loader2 className="animate-spin w-10 h-10 text-slate-400"/> : <FileUp size={48} className={uploadType === 'tx' ? 'text-blue-500' : 'text-green-500'}/>}
                     <span className="font-bold text-slate-700 text-lg">{uploading ? msg : `點擊上傳 ${uploadType === 'tx' ? '交易' : 'GA'} CSV`}</span>
-                    {uploadType === 'ga' && <p className="text-xs text-green-600 bg-green-100 px-3 py-1 rounded-full mt-2">🚩 請確保您已經在 Supabase 執行 V9 提供的 SQL 語法</p>}
                 </div>
             </div>
+
+            {/* ★★★ 新增：紅色的錯誤除錯區 (可複製) ★★★ */}
+            {errorDetails && (
+                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-left animate-in fade-in">
+                    <div className="flex items-center gap-2 text-red-700 font-bold mb-3">
+                        <AlertTriangle size={18} /> 哎呀，上傳失敗了！(您可以複製下方資訊給工程師)
+                    </div>
+                    <textarea 
+                        readOnly 
+                        className="w-full h-48 p-3 text-sm text-red-600 bg-white border border-red-200 rounded-lg outline-none font-mono" 
+                        value={errorDetails} 
+                    />
+                </div>
+            )}
         </div>
     ); 
 }
