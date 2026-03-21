@@ -8,7 +8,7 @@ import {
 import { 
   Loader2, PieChart as IconPie, Microscope, ListTodo, FileText, Upload, FileUp, 
   Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2, BookOpen,
-  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus, Filter
+  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { createBrowserClient } from '@supabase/ssr';
@@ -39,13 +39,13 @@ export default function Dashboard() {
   const [clientList, setClientList] = useState<string[]>([]); 
   
   // Data States
-  const [mergedMonthlyData, setMergedMonthlyData] = useState<any[]>([]); // 結合 TX 與 GA 的月資料
+  const [mergedMonthlyData, setMergedMonthlyData] = useState<any[]>([]); 
   const [productData, setProductData] = useState<any[]>([]);
   const [channelData, setChannelData] = useState<any[]>([]);
   const [rfmData, setRfmData] = useState<any[]>([]);
   const [cohortData, setCohortData] = useState<any[]>([]);
-  const [funnelData, setFunnelData] = useState<any[]>([]); // 新增：流量變現漏斗
-  const [gaCategoryData, setGaCategoryData] = useState<any[]>([]); // 新增：GA 來源分類
+  const [funnelData, setFunnelData] = useState<any[]>([]); 
+  const [gaCategoryData, setGaCategoryData] = useState<any[]>([]); 
   
   const [rfmSegments, setRfmSegments] = useState<any[]>([]);
   const [nesData, setNesData] = useState<any[]>([]);
@@ -89,7 +89,6 @@ export default function Dashboard() {
   const refreshData = async (clientName: string) => {
     setLoading(true);
     try {
-        // 1. 抓取 TX 與 GA 資料
         const [
             { data: monthlyTxRaw }, 
             { data: retRaw }, 
@@ -99,30 +98,29 @@ export default function Dashboard() {
             supabase.from('monthly_brand_pulse').select('*').eq('client_name', clientName).order('year_month', { ascending: true }),
             supabase.from('customer_retention_stats').select('*').eq('client_name', clientName),
             supabase.from('monthly_ga_metrics').select('*').eq('client_name', clientName).order('year_month', { ascending: true }),
-            supabase.from('ga_analytics').select('category, active_users').eq('client_name', clientName) // 抓取分類流量
+            supabase.from('ga_analytics').select('category, active_users').eq('client_name', clientName) 
         ]);
 
         const mData = monthlyTxRaw || [];
         const gData = gaRaw || [];
 
-        // 2. 核心：將 GA 流量與 TX 營收按「月份」合併 (Cross-Analysis)
         const gaMonthMap: any = {};
         gData.forEach(g => {
             gaMonthMap[g.year_month] = {
                 active_users: Number(g.total_active_users) || 0,
-                appointments: (Number(g.total_appointments) || 0) + (Number(g.total_leads) || 0) // 預約+名單
+                appointments: (Number(g.total_appointments) || 0) + (Number(g.total_leads) || 0) 
             };
         });
 
-        // 建立一個包含所有月份的 Set，確保不會漏掉只有 GA 沒訂單的月份
         const allMonths = Array.from(new Set([...mData.map(m => m.year_month), ...gData.map(g => g.year_month)])).sort();
 
         const mergedTrend = allMonths.map(month => {
-            const txMatch = mData.find(m => m.year_month === month) || { total_revenue: 0, old_customer_revenue: 0, new_customer_revenue: 0 };
+            const txMatch = mData.find(m => m.year_month === month) || { total_revenue: 0, old_customer_revenue: 0, new_customer_revenue: 0, aov: 0 };
             const gaMatch = gaMonthMap[month] || { active_users: 0, appointments: 0 };
             return {
                 year_month: month,
                 total_revenue: txMatch.total_revenue,
+                aov: txMatch.aov,
                 old_customer_revenue: txMatch.old_customer_revenue,
                 new_customer_revenue: txMatch.new_customer_revenue,
                 active_users: gaMatch.active_users,
@@ -131,7 +129,6 @@ export default function Dashboard() {
         });
         setMergedMonthlyData(mergedTrend);
 
-        // 3. 計算 KPI 與 Funnel
         const totalRev = mData.reduce((acc, cur) => acc + (cur.total_revenue || 0), 0);
         const totalOrd = mData.reduce((acc, cur) => acc + (cur.order_count || 0), 0);
         const avgAov = totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0;
@@ -144,15 +141,13 @@ export default function Dashboard() {
         const totalConversions = gData.reduce((acc, cur) => acc + (Number(cur.total_appointments) || 0) + (Number(cur.total_leads) || 0), 0);
         const overallConversionRate = totalActiveUsers > 0 ? (totalConversions / totalActiveUsers) * 100 : null;
 
-        // 終極流量變現漏斗資料 (GA -> TX)
         setFunnelData([
             { stage: '1. 活躍流量 (GA)', count: totalActiveUsers, fill: '#3b82f6' },
             { stage: '2. 預約名單 (GA)', count: totalConversions, fill: '#10b981' },
             { stage: '3. 實際成交客 (TX)', count: totalCustomers, fill: '#f59e0b' },
             { stage: '4. 回購忠誠客 (TX)', count: repeatCustomers, fill: '#ef4444' }
-        ].filter(f => f.count > 0)); // 過濾掉 0 的層級，以免圖表很奇怪
+        ].filter(f => f.count > 0)); 
 
-        // GA 來源分類圓餅圖
         const catMap: any = {};
         (gaCatRaw || []).forEach(c => {
             const cat = c.category || '未分類';
@@ -166,10 +161,9 @@ export default function Dashboard() {
             profit: { value: totalRev, hasData: totalRev > 0, unit: '$' },
             vip: { value: avgAov, hasData: avgAov > 0, unit: '$' },
             retention: { value: repeatRate, hasData: totalCustomers > 0, unit: '%' },
-            reputation: { value: null, hasData: false, unit: '分' }
+            reputation: { value: null, hasData: false, unit: '分' } 
         });
 
-        // 4. 其他深度資料 (Product, Channel, RFM, Cohort)
         const { data: prodRaw } = await supabase.from('product_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false }).limit(10);
         setProductData((prodRaw || []).map(p => ({ name: p.product_name, value: p.total_revenue })));
 
@@ -247,7 +241,11 @@ export default function Dashboard() {
                 <div className="relative">
                     <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
                         <Building2 size={16} className="text-slate-500"/>
-                        <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer min-w-[120px]">
+                        <select 
+                            value={selectedClient} 
+                            onChange={(e) => setSelectedClient(e.target.value)}
+                            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer min-w-[120px]"
+                        >
                             <option value="" disabled>請選擇客戶...</option>
                             {clientList.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
@@ -270,7 +268,9 @@ export default function Dashboard() {
                 <Building2 size={64} className="mb-4 text-slate-200"/>
                 <h3 className="text-xl font-bold text-slate-600">請先選擇一位客戶</h3>
                 <p className="mb-6">左上角下拉選單選擇現有客戶，或至「資料上傳」建立新客戶。</p>
-                <button onClick={() => setActiveTab('page4')} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"><Plus size={18}/> 上傳新資料</button>
+                <button onClick={() => setActiveTab('page4')} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
+                    <Plus size={18}/> 上傳新資料
+                </button>
             </div>
         )}
 
@@ -282,6 +282,12 @@ export default function Dashboard() {
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
                     <p className="text-sm text-slate-500">以六脈指標動態評估品牌健康度</p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        <button className="px-3 py-1 text-sm font-bold bg-white shadow rounded text-slate-800">全部期間</button>
+                        <button className="px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50" disabled>本年對比</button>
+                    </div>
                 </div>
             </div>
 
@@ -297,7 +303,6 @@ export default function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* ★★★ V10.0 重大升級：三合一雙軸交叉趨勢圖 (營收 vs 流量 vs 預約) ★★★ */}
                     <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-slate-800">營收、流量與預約轉換趨勢 (Cross-Analysis)</h3>
@@ -309,12 +314,11 @@ export default function Dashboard() {
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
                                     <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
-                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${(val/1000).toFixed(0)}k 人`} />
-                                    <Tooltip formatter={(val: any, name: string) => name.includes('營收') ? `$${Number(val).toLocaleString()}` : `${Number(val).toLocaleString()} 人/組`} />
+                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${(val/1000).toFixed(0)}k`} />
+                                    {/* ★ 修復 TypeScript 錯誤: 將 name: string 改為 name: any */}
+                                    <Tooltip formatter={(val: any, name: any) => (name || '').includes('營收') ? `$${Number(val).toLocaleString()}` : `${Number(val).toLocaleString()} 人/組`} />
                                     <Legend />
-                                    {/* 營收用柱狀圖 (左軸) */}
                                     <Bar yAxisId="left" dataKey="total_revenue" fill="#3b82f6" name="總營收" radius={[4,4,0,0]} barSize={40} />
-                                    {/* 流量與預約用折線圖 (右軸) */}
                                     <Line yAxisId="right" type="monotone" dataKey="active_users" stroke="#8b5cf6" strokeWidth={3} name="活躍使用者" dot={{ r: 4 }} />
                                     <Line yAxisId="right" type="monotone" dataKey="appointments" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" name="預約與名單數" dot={{ r: 4 }} />
                                 </ComposedChart>
@@ -324,6 +328,31 @@ export default function Dashboard() {
                     </div>
                     
                     <AiDiagnosisPanel clientName={selectedClient} revenue={pulseMetrics.profit.value} rfmSegments={rfmSegments} nesData={nesData} topProducts={productData} />
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-slate-50">
+                        <h3 className="text-lg font-bold text-slate-800">六脈狀態概覽</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-white text-slate-500 border-b border-gray-200">
+                                <tr>
+                                    <th className="p-4 font-semibold">指標 (Pulse)</th>
+                                    <th className="p-4 font-semibold">全期累計</th>
+                                    <th className="p-4 font-semibold">資料狀態</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <TableRow title="獲利脈 (總營收)" val={pulseMetrics.profit.value} unit="$" status={pulseMetrics.profit.hasData ? 'good' : 'none'} msg="資料齊全" />
+                                <TableRow title="金主脈 (客單價)" val={pulseMetrics.vip.value} unit="$" status={pulseMetrics.vip.hasData ? 'good' : 'none'} msg="資料齊全" />
+                                <TableRow title="老主脈 (>1次購買率)" val={pulseMetrics.retention.value} unit="%" status={pulseMetrics.retention.hasData ? 'good' : 'none'} msg="資料齊全" />
+                                <TableRow title="流量脈 (活躍使用者)" val={pulseMetrics.traffic.value} unit="人" status={pulseMetrics.traffic.hasData ? 'good' : 'none'} msg={pulseMetrics.traffic.hasData ? "資料齊全" : "需補充 GA 流量數據"} />
+                                <TableRow title="轉換脈 (預約/留單轉換率)" val={pulseMetrics.conversion.value} unit="%" status={pulseMetrics.conversion.hasData ? 'good' : 'none'} msg={pulseMetrics.conversion.hasData ? "資料齊全" : "需補充 GA 流量數據"} />
+                                <TableRow title="擁主脈 (NPS)" val={null} unit="" status="none" msg="需補充問卷調查數據" />
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </>
             )}
@@ -335,7 +364,6 @@ export default function Dashboard() {
           <div className="space-y-6 animate-in fade-in">
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
             
-            {/* ★★★ V10.0 重大升級：流量變現漏斗 & GA 流量來源 ★★★ */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4">
@@ -411,7 +439,7 @@ export default function Dashboard() {
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V10.0 漏斗分析版)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V10.1 漏斗分析版)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義</h3>
@@ -435,7 +463,7 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* === Page 4: Upload (V10 包含 BOM 破解與紅框除錯) === */}
+        {/* === Page 4: Upload (V10.1 包含 BOM 破解與紅框除錯) === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in">
                 <div className="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
@@ -566,7 +594,7 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
     );
 }
 
-// ★★★ 核心修改：DataUploader 編碼切換防呆版 ★★★
+// ★★★ 核心修改：DataUploader 加入 BOM 破解與可複製除錯視窗 ★★★
 function DataUploader({ supabase, onSuccess }: any) { 
     const [uploading, setUploading] = useState(false); 
     const [clientName, setClientName] = useState("");
@@ -709,7 +737,7 @@ ${JSON.stringify(results.data[0], null, 2)}`;
 
             {errorDetails && (
                 <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-left animate-in fade-in">
-                    <div className="flex items-center gap-2 text-red-700 font-bold mb-3"><AlertTriangle size={18} /> 哎呀，上傳失敗了！</div>
+                    <div className="flex items-center gap-2 text-red-700 font-bold mb-3"><AlertTriangle size={18} /> 哎呀，上傳失敗了！(可複製給工程師)</div>
                     <textarea readOnly className="w-full h-48 p-3 text-sm text-red-600 bg-white border border-red-200 rounded-lg outline-none font-mono" value={errorDetails} />
                 </div>
             )}
