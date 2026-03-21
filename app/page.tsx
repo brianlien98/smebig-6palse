@@ -8,7 +8,7 @@ import {
 import { 
   Loader2, PieChart as IconPie, Microscope, ListTodo, FileText, Upload, FileUp, 
   Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2, BookOpen,
-  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus
+  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus, Filter
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { createBrowserClient } from '@supabase/ssr';
@@ -39,16 +39,17 @@ export default function Dashboard() {
   const [clientList, setClientList] = useState<string[]>([]); 
   
   // Data States
-  const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [mergedMonthlyData, setMergedMonthlyData] = useState<any[]>([]); // 結合 TX 與 GA 的月資料
   const [productData, setProductData] = useState<any[]>([]);
   const [channelData, setChannelData] = useState<any[]>([]);
   const [rfmData, setRfmData] = useState<any[]>([]);
   const [cohortData, setCohortData] = useState<any[]>([]);
+  const [funnelData, setFunnelData] = useState<any[]>([]); // 新增：流量變現漏斗
+  const [gaCategoryData, setGaCategoryData] = useState<any[]>([]); // 新增：GA 來源分類
   
   const [rfmSegments, setRfmSegments] = useState<any[]>([]);
   const [nesData, setNesData] = useState<any[]>([]);
 
-  // 六脈實際數值狀態
   const [pulseMetrics, setPulseMetrics] = useState({
       traffic: { value: null as number | null, hasData: false, unit: '人' },      
       conversion: { value: null as number | null, hasData: false, unit: '%' },    
@@ -88,29 +89,76 @@ export default function Dashboard() {
   const refreshData = async (clientName: string) => {
     setLoading(true);
     try {
-        // 1. Monthly TX & KPI
-        const { data: monthlyRaw } = await supabase.from('monthly_brand_pulse').select('*').eq('client_name', clientName).order('year_month', { ascending: true });
-        const mData = monthlyRaw || [];
-        setMonthlyData(mData);
+        // 1. 抓取 TX 與 GA 資料
+        const [
+            { data: monthlyTxRaw }, 
+            { data: retRaw }, 
+            { data: gaRaw },
+            { data: gaCatRaw }
+        ] = await Promise.all([
+            supabase.from('monthly_brand_pulse').select('*').eq('client_name', clientName).order('year_month', { ascending: true }),
+            supabase.from('customer_retention_stats').select('*').eq('client_name', clientName),
+            supabase.from('monthly_ga_metrics').select('*').eq('client_name', clientName).order('year_month', { ascending: true }),
+            supabase.from('ga_analytics').select('category, active_users').eq('client_name', clientName) // 抓取分類流量
+        ]);
 
+        const mData = monthlyTxRaw || [];
+        const gData = gaRaw || [];
+
+        // 2. 核心：將 GA 流量與 TX 營收按「月份」合併 (Cross-Analysis)
+        const gaMonthMap: any = {};
+        gData.forEach(g => {
+            gaMonthMap[g.year_month] = {
+                active_users: Number(g.total_active_users) || 0,
+                appointments: (Number(g.total_appointments) || 0) + (Number(g.total_leads) || 0) // 預約+名單
+            };
+        });
+
+        // 建立一個包含所有月份的 Set，確保不會漏掉只有 GA 沒訂單的月份
+        const allMonths = Array.from(new Set([...mData.map(m => m.year_month), ...gData.map(g => g.year_month)])).sort();
+
+        const mergedTrend = allMonths.map(month => {
+            const txMatch = mData.find(m => m.year_month === month) || { total_revenue: 0, old_customer_revenue: 0, new_customer_revenue: 0 };
+            const gaMatch = gaMonthMap[month] || { active_users: 0, appointments: 0 };
+            return {
+                year_month: month,
+                total_revenue: txMatch.total_revenue,
+                old_customer_revenue: txMatch.old_customer_revenue,
+                new_customer_revenue: txMatch.new_customer_revenue,
+                active_users: gaMatch.active_users,
+                appointments: gaMatch.appointments
+            };
+        });
+        setMergedMonthlyData(mergedTrend);
+
+        // 3. 計算 KPI 與 Funnel
         const totalRev = mData.reduce((acc, cur) => acc + (cur.total_revenue || 0), 0);
         const totalOrd = mData.reduce((acc, cur) => acc + (cur.order_count || 0), 0);
         const avgAov = totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0;
 
-        // 2. Retention Stats
-        const { data: retRaw } = await supabase.from('customer_retention_stats').select('*').eq('client_name', clientName);
         const totalCustomers = retRaw?.length || 0;
         const repeatCustomers = retRaw?.filter(c => c.purchase_days > 1).length || 0;
         const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
 
-        // 3. GA Metrics
-        const { data: gaRaw } = await supabase.from('monthly_ga_metrics').select('*').eq('client_name', clientName).order('year_month', { ascending: true });
-        
-        const totalActiveUsers = (gaRaw || []).reduce((acc, cur) => acc + (Number(cur.total_active_users) || 0), 0);
-        const totalAppointments = (gaRaw || []).reduce((acc, cur) => acc + (Number(cur.total_appointments) || 0), 0);
-        const totalLeads = (gaRaw || []).reduce((acc, cur) => acc + (Number(cur.total_leads) || 0), 0);
-        const totalConversions = totalAppointments + totalLeads;
+        const totalActiveUsers = gData.reduce((acc, cur) => acc + (Number(cur.total_active_users) || 0), 0);
+        const totalConversions = gData.reduce((acc, cur) => acc + (Number(cur.total_appointments) || 0) + (Number(cur.total_leads) || 0), 0);
         const overallConversionRate = totalActiveUsers > 0 ? (totalConversions / totalActiveUsers) * 100 : null;
+
+        // 終極流量變現漏斗資料 (GA -> TX)
+        setFunnelData([
+            { stage: '1. 活躍流量 (GA)', count: totalActiveUsers, fill: '#3b82f6' },
+            { stage: '2. 預約名單 (GA)', count: totalConversions, fill: '#10b981' },
+            { stage: '3. 實際成交客 (TX)', count: totalCustomers, fill: '#f59e0b' },
+            { stage: '4. 回購忠誠客 (TX)', count: repeatCustomers, fill: '#ef4444' }
+        ].filter(f => f.count > 0)); // 過濾掉 0 的層級，以免圖表很奇怪
+
+        // GA 來源分類圓餅圖
+        const catMap: any = {};
+        (gaCatRaw || []).forEach(c => {
+            const cat = c.category || '未分類';
+            catMap[cat] = (catMap[cat] || 0) + (Number(c.active_users) || 0);
+        });
+        setGaCategoryData(Object.entries(catMap).map(([name, value]) => ({ name, value })).sort((a:any, b:any) => b.value - a.value));
 
         setPulseMetrics({
             traffic: { value: totalActiveUsers > 0 ? totalActiveUsers : null, hasData: totalActiveUsers > 0, unit: '人' }, 
@@ -121,14 +169,13 @@ export default function Dashboard() {
             reputation: { value: null, hasData: false, unit: '分' }
         });
 
-        // 4. Product & Channel
+        // 4. 其他深度資料 (Product, Channel, RFM, Cohort)
         const { data: prodRaw } = await supabase.from('product_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false }).limit(10);
         setProductData((prodRaw || []).map(p => ({ name: p.product_name, value: p.total_revenue })));
 
         const { data: chanRaw } = await supabase.from('channel_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false });
         setChannelData((chanRaw || []).map(c => ({ name: c.channel, value: c.total_revenue })));
 
-        // 5. RFM & NES 運算
         const { data: rfmRaw } = await supabase.from('rfm_analysis').select('*').eq('client_name', clientName);
         const fullRfm = rfmRaw || [];
         setRfmData(fullRfm.slice(0, 1000).map((r: any) => ({ x: r.recency_days, y: r.frequency, z: r.monetary })));
@@ -166,7 +213,6 @@ export default function Dashboard() {
         setRfmSegments([ambassador, star, regular, sleepingWhale, lost, others].filter(s => s.count > 0));
         setNesData([nes.N, nes.E, nes.S]);
 
-        // 6. Cohort
         const { data: cohortRaw } = await supabase.from('cohort_retention').select('*').eq('client_name', clientName);
         const cohortMap: any = {};
         (cohortRaw || []).forEach((row: any) => {
@@ -201,11 +247,7 @@ export default function Dashboard() {
                 <div className="relative">
                     <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
                         <Building2 size={16} className="text-slate-500"/>
-                        <select 
-                            value={selectedClient} 
-                            onChange={(e) => setSelectedClient(e.target.value)}
-                            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer min-w-[120px]"
-                        >
+                        <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer min-w-[120px]">
                             <option value="" disabled>請選擇客戶...</option>
                             {clientList.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
@@ -228,9 +270,7 @@ export default function Dashboard() {
                 <Building2 size={64} className="mb-4 text-slate-200"/>
                 <h3 className="text-xl font-bold text-slate-600">請先選擇一位客戶</h3>
                 <p className="mb-6">左上角下拉選單選擇現有客戶，或至「資料上傳」建立新客戶。</p>
-                <button onClick={() => setActiveTab('page4')} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
-                    <Plus size={18}/> 上傳新資料
-                </button>
+                <button onClick={() => setActiveTab('page4')} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"><Plus size={18}/> 上傳新資料</button>
             </div>
         )}
 
@@ -242,12 +282,6 @@ export default function Dashboard() {
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
                     <p className="text-sm text-slate-500">以六脈指標動態評估品牌健康度</p>
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                        <button className="px-3 py-1 text-sm font-bold bg-white shadow rounded text-slate-800">全部期間</button>
-                        <button className="px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50" disabled>本年對比</button>
-                    </div>
                 </div>
             </div>
 
@@ -263,52 +297,33 @@ export default function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* ★★★ V10.0 重大升級：三合一雙軸交叉趨勢圖 (營收 vs 流量 vs 預約) ★★★ */}
                     <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold text-slate-800">營收趨勢分析 (本期累積)</h3>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">堆疊圖</span>
+                            <h3 className="text-lg font-bold text-slate-800">營收、流量與預約轉換趨勢 (Cross-Analysis)</h3>
+                            <span className="text-xs font-bold bg-blue-100 text-blue-600 px-2 py-1 rounded">左軸: 營收 | 右軸: 流量/預約</span>
                         </div>
                         <div className="h-[300px]">
-                            {/* 加入 minWidth=0 防護 Recharts warning */}
                             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                <ComposedChart data={monthlyData}>
+                                <ComposedChart data={mergedMonthlyData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
-                                    <YAxis tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
-                                    <Tooltip formatter={(val: any) => `$${Number(val).toLocaleString()}`} />
+                                    <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/1000).toFixed(0)}k`} />
+                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${(val/1000).toFixed(0)}k 人`} />
+                                    <Tooltip formatter={(val: any, name: string) => name.includes('營收') ? `$${Number(val).toLocaleString()}` : `${Number(val).toLocaleString()} 人/組`} />
                                     <Legend />
-                                    <Bar dataKey="old_customer_revenue" stackId="a" fill="#8b5cf6" name="舊客營收" radius={[0,0,0,0]} />
-                                    <Bar dataKey="new_customer_revenue" stackId="a" fill="#22c55e" name="新客營收" radius={[4,4,0,0]} />
+                                    {/* 營收用柱狀圖 (左軸) */}
+                                    <Bar yAxisId="left" dataKey="total_revenue" fill="#3b82f6" name="總營收" radius={[4,4,0,0]} barSize={40} />
+                                    {/* 流量與預約用折線圖 (右軸) */}
+                                    <Line yAxisId="right" type="monotone" dataKey="active_users" stroke="#8b5cf6" strokeWidth={3} name="活躍使用者" dot={{ r: 4 }} />
+                                    <Line yAxisId="right" type="monotone" dataKey="appointments" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" name="預約與名單數" dot={{ r: 4 }} />
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>
+                        <p className="text-xs text-slate-500 mt-2 text-center">💡 洞察：觀察紫色線(流量)上升時，綠色虛線(預約數)與藍色柱體(營收)是否有同步跟上，以判斷流量品質。</p>
                     </div>
+                    
                     <AiDiagnosisPanel clientName={selectedClient} revenue={pulseMetrics.profit.value} rfmSegments={rfmSegments} nesData={nesData} topProducts={productData} />
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-slate-50">
-                        <h3 className="text-lg font-bold text-slate-800">六脈狀態概覽</h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-white text-slate-500 border-b border-gray-200">
-                                <tr>
-                                    <th className="p-4 font-semibold">指標 (Pulse)</th>
-                                    <th className="p-4 font-semibold">全期累計</th>
-                                    <th className="p-4 font-semibold">資料狀態</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <TableRow title="獲利脈 (總營收)" val={pulseMetrics.profit.value} unit="$" status={pulseMetrics.profit.hasData ? 'good' : 'none'} msg="資料齊全" />
-                                <TableRow title="金主脈 (客單價)" val={pulseMetrics.vip.value} unit="$" status={pulseMetrics.vip.hasData ? 'good' : 'none'} msg="資料齊全" />
-                                <TableRow title="老主脈 (>1次購買率)" val={pulseMetrics.retention.value} unit="%" status={pulseMetrics.retention.hasData ? 'good' : 'none'} msg="資料齊全" />
-                                <TableRow title="流量脈 (活躍使用者)" val={pulseMetrics.traffic.value} unit="人" status={pulseMetrics.traffic.hasData ? 'good' : 'none'} msg={pulseMetrics.traffic.hasData ? "資料齊全" : "需補充 GA 流量數據"} />
-                                <TableRow title="轉換脈 (預約/留單轉換率)" val={pulseMetrics.conversion.value} unit="%" status={pulseMetrics.conversion.hasData ? 'good' : 'none'} msg={pulseMetrics.conversion.hasData ? "資料齊全" : "需補充 GA 流量數據"} />
-                                <TableRow title="擁主脈 (NPS)" val={null} unit="" status="none" msg="需補充問卷調查數據" />
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
             </>
             )}
@@ -319,6 +334,52 @@ export default function Dashboard() {
         {selectedClient && activeTab === 'page2' && (
           <div className="space-y-6 animate-in fade-in">
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
+            
+            {/* ★★★ V10.0 重大升級：流量變現漏斗 & GA 流量來源 ★★★ */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">全通路流量變現漏斗 (Funnel)</h3>
+                        <span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">整合 GA 與 TX 數據</span>
+                    </div>
+                    <div className="h-[250px]">
+                        {funnelData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                <BarChart data={funnelData} layout="vertical" margin={{ left: 40, right: 30 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="stage" type="category" width={130} tick={{fontSize: 12, fontWeight: 'bold'}} />
+                                    <Tooltip formatter={(val:any) => `${val.toLocaleString()} 人/組`} />
+                                    <Bar dataKey="count" radius={[0, 4, 4, 0]} label={{ position: 'right', fill: '#64748b', fontSize: 12, formatter: (v:any)=>v.toLocaleString() }}>
+                                        {funnelData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : <EmptyState message="請確保已上傳 GA 與 交易資料 以繪製漏斗" />}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 text-center">診斷：檢視在哪個階層流失最多，對症下藥優化轉換率。</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800 border-l-4 border-teal-500 pl-3">GA 流量來源屬性</h3>
+                        <span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">婚禮 vs 節慶</span>
+                    </div>
+                    <div className="h-[250px]">
+                        {gaCategoryData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                <PieChart>
+                                    <Pie data={gaCategoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>
+                                        {gaCategoryData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
+                                    </Pie>
+                                    <Tooltip formatter={(val:any) => `${val.toLocaleString()} 活躍使用者`} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : <EmptyState message="無 GA 流量來源分類資料" />}
+                    </div>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3">NES 顧客生命週期</h3><span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">N=新, E=活, S=睡</span></div>
@@ -329,20 +390,11 @@ export default function Dashboard() {
                     <div className="h-[250px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><PieChart><Pie data={rfmSegments} dataKey="rev" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{rfmSegments.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /></PieChart></ResponsiveContainer></div>
                 </div>
             </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-green-500 pl-3 mb-4">熱銷品項排行 (Top 10)</h3>
                     <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><BarChart layout="vertical" data={productData}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} /><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} name="銷售額" /></BarChart></ResponsiveContainer></div>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-purple-500 pl-3 mb-4">通路成效分析</h3>
-                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><PieChart><Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label={({name, percent}: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}>{channelData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Tooltip formatter={(val:any) => `$${val.toLocaleString()}`} /><Legend /></PieChart></ResponsiveContainer></div>
-                </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold text-slate-800 border-l-4 border-slate-500 pl-3 mb-4">RFM 原始散佈圖 (取樣 1000 點)</h3>
-                    <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ScatterChart><CartesianGrid /><XAxis type="number" dataKey="x" name="Recency (天前)" reversed /><YAxis type="number" dataKey="y" name="Frequency (次)" /><ZAxis type="number" dataKey="z" range={[50, 800]} name="Monetary" /><Tooltip cursor={{ strokeDasharray: '3 3' }} /><Scatter name="Customers" data={rfmData} fill="#3b82f6" fillOpacity={0.6} /></ScatterChart></ResponsiveContainer></div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm overflow-x-auto border border-gray-100">
                     <h3 className="text-lg font-bold text-slate-800 border-l-4 border-orange-500 pl-3 mb-4">同層留存率 (Cohort)</h3>
@@ -359,7 +411,7 @@ export default function Dashboard() {
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V9.2 行銷擴充版)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V10.0 漏斗分析版)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義</h3>
@@ -371,12 +423,19 @@ export default function Dashboard() {
                                 <SpecItem title="老主脈 (Retention)" logic="購買 2 次以上人數 / 總客戶數" desc="歷史區間內的回購黏著度。" />
                             </ul>
                         </div>
+                        <div>
+                            <h3 className="font-bold text-lg mb-4 text-slate-700">深度交叉分析邏輯</h3>
+                            <ul className="space-y-4">
+                                <SpecItem title="流量變現漏斗" logic="GA活躍用戶 ➡️ GA預約名單 ➡️ TX成交客 ➡️ TX回購客" desc="打通前端流量與後端交易，檢視全通路轉換率流失節點。" />
+                                <SpecItem title="營收流量交叉趨勢" logic="Y左軸: 營收 / Y右軸: 流量與預約" desc="觀察行銷帶來的大量流量，是否有確實帶動後端實質營收成長。" />
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
         )}
 
-        {/* === Page 4: Upload === */}
+        {/* === Page 4: Upload (V10 包含 BOM 破解與紅框除錯) === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in">
                 <div className="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
@@ -415,14 +474,7 @@ function PulseCard({ title, icon, color, data, missingMsg, trend }: any) {
                     <div className={`p-2 rounded-lg ${c.bg}`}>{icon}</div>
                     <h3 className="font-bold">{title}</h3>
                 </div>
-                {hasData && trend !== null && trend !== undefined && (
-                    <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${trend >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {trend >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}
-                        {Math.abs(trend)}%
-                    </span>
-                )}
             </div>
-            
             {hasData ? (
                 <div>
                     <div className="text-3xl font-black text-slate-800">
@@ -476,7 +528,7 @@ function AiDiagnosisPanel({ clientName, revenue, rfmSegments, nesData, topProduc
     return (
         <div className="lg:col-span-1 bg-[#1e293b] text-white rounded-2xl p-6 flex flex-col shadow-xl">
             <div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4"><Bot className="text-blue-400" /><h3 className="text-lg font-bold">AI 營運診斷</h3></div>
-            <div className="flex-1 space-y-4">{d ? <div className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed border border-white/10 animate-in fade-in whitespace-pre-wrap">{d}</div> : <div className="text-slate-400 text-sm text-center py-10">{l ? "AI 正在分析 RFM 與 NES 數據..." : `點擊分析 ${clientName || '...'} 的健康狀況`}</div>}</div>
+            <div className="flex-1 space-y-4">{d ? <div className="bg-white/10 p-4 rounded-xl text-sm leading-relaxed border border-white/10 animate-in fade-in whitespace-pre-wrap">{d}</div> : <div className="text-slate-400 text-sm text-center py-10">{l ? "AI 正在分析大數據..." : `點擊分析 ${clientName || '...'} 的健康狀況`}</div>}</div>
             <button onClick={run} disabled={l || !clientName} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition flex justify-center items-center gap-2 disabled:opacity-50">{l ? <Loader2 className="animate-spin" /> : <Sparkles size={16}/>} {l ? '分析中...' : '開始診斷'}</button>
         </div>
     ); 
@@ -514,12 +566,12 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
     );
 }
 
-// ★★★ 核心修改：DataUploader 加入編碼選擇器與紅框除錯器 ★★★
+// ★★★ 核心修改：DataUploader 編碼切換防呆版 ★★★
 function DataUploader({ supabase, onSuccess }: any) { 
     const [uploading, setUploading] = useState(false); 
     const [clientName, setClientName] = useState("");
     const [uploadType, setUploadType] = useState('tx'); 
-    const [encoding, setEncoding] = useState('UTF-8'); // 新增：編碼選擇
+    const [encoding, setEncoding] = useState('UTF-8'); 
     const [msg, setMsg] = useState(""); 
     const [errorDetails, setErrorDetails] = useState(""); 
     
@@ -535,8 +587,8 @@ function DataUploader({ supabase, onSuccess }: any) {
         Papa.parse(file, { 
             header: true, 
             skipEmptyLines: true, 
-            encoding: encoding, // ★ 強制指定編碼，破解亂碼地雷
-            transformHeader: (header) => header.replace(/^\uFEFF/, '').trim(), // 移除隱藏字元
+            encoding: encoding, 
+            transformHeader: (header) => header.replace(/^\uFEFF/, '').trim(), 
             complete: async (results) => { 
                 let cleanRows: any[] = [];
                 
@@ -586,7 +638,6 @@ function DataUploader({ supabase, onSuccess }: any) {
                     }).filter((r:any) => r.year_month !== '');
                 }
 
-                // 🔴 防呆機制觸發
                 if (cleanRows.length === 0) {
                     const sampleHeader = Object.keys(results.data[0] || {}).join(', ');
                     const isGarbled = sampleHeader.includes('');
@@ -640,15 +691,9 @@ ${JSON.stringify(results.data[0], null, 2)}`;
                 <button onClick={() => {setUploadType('ga'); setErrorDetails("");}} className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'ga' ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>2. GA 流量資料 (CSV)</button>
             </div>
 
-            {/* 新增：編碼切換器 */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-600">📂 檔案編碼 (若出現亂碼請切換)</span>
-                <select 
-                    value={encoding} 
-                    onChange={(e) => setEncoding(e.target.value)}
-                    className="border border-slate-300 rounded px-3 py-1 text-sm bg-white outline-none"
-                    disabled={uploading}
-                >
+                <select value={encoding} onChange={(e) => setEncoding(e.target.value)} className="border border-slate-300 rounded px-3 py-1 text-sm bg-white outline-none" disabled={uploading}>
                     <option value="UTF-8">UTF-8 (系統預設)</option>
                     <option value="Big5">Big5 (台灣 Excel 常見)</option>
                 </select>
@@ -662,17 +707,10 @@ ${JSON.stringify(results.data[0], null, 2)}`;
                 </div>
             </div>
 
-            {/* 紅色的錯誤除錯區 (可複製) */}
             {errorDetails && (
                 <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-left animate-in fade-in">
-                    <div className="flex items-center gap-2 text-red-700 font-bold mb-3">
-                        <AlertTriangle size={18} /> 哎呀，上傳失敗了！
-                    </div>
-                    <textarea 
-                        readOnly 
-                        className="w-full h-48 p-3 text-sm text-red-600 bg-white border border-red-200 rounded-lg outline-none font-mono" 
-                        value={errorDetails} 
-                    />
+                    <div className="flex items-center gap-2 text-red-700 font-bold mb-3"><AlertTriangle size={18} /> 哎呀，上傳失敗了！</div>
+                    <textarea readOnly className="w-full h-48 p-3 text-sm text-red-600 bg-white border border-red-200 rounded-lg outline-none font-mono" value={errorDetails} />
                 </div>
             )}
         </div>
