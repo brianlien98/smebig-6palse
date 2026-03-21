@@ -128,7 +128,7 @@ export default function Dashboard() {
         const { data: chanRaw } = await supabase.from('channel_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false });
         setChannelData((chanRaw || []).map(c => ({ name: c.channel, value: c.total_revenue })));
 
-        // 5. RFM & NES
+        // 5. RFM & NES 運算
         const { data: rfmRaw } = await supabase.from('rfm_analysis').select('*').eq('client_name', clientName);
         const fullRfm = rfmRaw || [];
         setRfmData(fullRfm.slice(0, 1000).map((r: any) => ({ x: r.recency_days, y: r.frequency, z: r.monetary })));
@@ -237,6 +237,7 @@ export default function Dashboard() {
         {/* === Page 1: Overview === */}
         {selectedClient && activeTab === 'page1' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+            
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
@@ -358,7 +359,7 @@ export default function Dashboard() {
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V9.1)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V9.2 行銷擴充版)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-slate-700">六脈指標定義</h3>
@@ -375,7 +376,7 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* === Page 4: Upload (V9.1 加入 BOM 破解與複製除錯區) === */}
+        {/* === Page 4: Upload === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in">
                 <div className="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
@@ -513,28 +514,29 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
     );
 }
 
-// ★★★ 核心修改：DataUploader 加入 BOM 破解與可複製除錯視窗 ★★★
+// ★★★ 核心修改：DataUploader 加入編碼選擇器與紅框除錯器 ★★★
 function DataUploader({ supabase, onSuccess }: any) { 
     const [uploading, setUploading] = useState(false); 
     const [clientName, setClientName] = useState("");
     const [uploadType, setUploadType] = useState('tx'); 
+    const [encoding, setEncoding] = useState('UTF-8'); // 新增：編碼選擇
     const [msg, setMsg] = useState(""); 
-    const [errorDetails, setErrorDetails] = useState(""); // ★ 存放可複製的錯誤訊息
+    const [errorDetails, setErrorDetails] = useState(""); 
     
     const handleFile = (e: any) => { 
-        setErrorDetails(""); // 重置錯誤狀態
+        setErrorDetails(""); 
         if (!clientName.trim()) { alert("請先輸入客戶名稱！"); e.target.value = ''; return; }
         const file = e.target.files[0]; 
         if (!file) return; 
         
         setUploading(true); 
-        setMsg(`正在解析 ${uploadType === 'tx' ? '交易' : 'GA'} 資料...`); 
+        setMsg(`以 ${encoding} 編碼解析 ${uploadType === 'tx' ? '交易' : 'GA'} 資料...`); 
         
         Papa.parse(file, { 
             header: true, 
             skipEmptyLines: true, 
-            // ★★★ BOM 破解器：強制把標題裡的隱藏字元 (\uFEFF) 與前後空白洗掉 ★★★
-            transformHeader: (header) => header.replace(/^\uFEFF/, '').trim(),
+            encoding: encoding, // ★ 強制指定編碼，破解亂碼地雷
+            transformHeader: (header) => header.replace(/^\uFEFF/, '').trim(), // 移除隱藏字元
             complete: async (results) => { 
                 let cleanRows: any[] = [];
                 
@@ -586,13 +588,16 @@ function DataUploader({ supabase, onSuccess }: any) {
 
                 // 🔴 防呆機制觸發
                 if (cleanRows.length === 0) {
+                    const sampleHeader = Object.keys(results.data[0] || {}).join(', ');
+                    const isGarbled = sampleHeader.includes('');
+                    
                     const debugInfo = `解析失敗！沒有找到有效資料。
 請確認：
-1. 是否上傳了錯誤的檔案？
-2. 上方按鈕是否選錯？(您目前選的是【${uploadType === 'tx' ? '交易訂單' : 'GA流量'}】)
+1. 上方按鈕是否選錯？(目前選擇: ${uploadType === 'tx' ? '交易訂單' : 'GA流量'})
+${isGarbled ? '2. 🚨 偵測到亂碼！請在上方「檔案編碼」切換為 Big5 再試一次！' : ''}
 
-【系統讀取到的欄位名稱 (請檢查是否有錯字)】：
-${Object.keys(results.data[0] || {}).join(', ')}
+【系統讀取到的欄位名稱】：
+${sampleHeader}
 
 【系統讀取到的第一筆資料】：
 ${JSON.stringify(results.data[0], null, 2)}`;
@@ -635,6 +640,20 @@ ${JSON.stringify(results.data[0], null, 2)}`;
                 <button onClick={() => {setUploadType('ga'); setErrorDetails("");}} className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'ga' ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>2. GA 流量資料 (CSV)</button>
             </div>
 
+            {/* 新增：編碼切換器 */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-600">📂 檔案編碼 (若出現亂碼請切換)</span>
+                <select 
+                    value={encoding} 
+                    onChange={(e) => setEncoding(e.target.value)}
+                    className="border border-slate-300 rounded px-3 py-1 text-sm bg-white outline-none"
+                    disabled={uploading}
+                >
+                    <option value="UTF-8">UTF-8 (系統預設)</option>
+                    <option value="Big5">Big5 (台灣 Excel 常見)</option>
+                </select>
+            </div>
+
             <div className={`border-2 border-dashed p-10 text-center cursor-pointer transition-all rounded-2xl relative ${uploadType === 'tx' ? 'border-blue-300 bg-blue-50/50 hover:bg-blue-50' : 'border-green-300 bg-green-50/50 hover:bg-green-50'}`}>
                 <input type="file" accept=".csv" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" disabled={uploading} />
                 <div className="flex flex-col items-center gap-3">
@@ -643,11 +662,11 @@ ${JSON.stringify(results.data[0], null, 2)}`;
                 </div>
             </div>
 
-            {/* ★★★ 新增：紅色的錯誤除錯區 (可複製) ★★★ */}
+            {/* 紅色的錯誤除錯區 (可複製) */}
             {errorDetails && (
                 <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-left animate-in fade-in">
                     <div className="flex items-center gap-2 text-red-700 font-bold mb-3">
-                        <AlertTriangle size={18} /> 哎呀，上傳失敗了！(您可以複製下方資訊給工程師)
+                        <AlertTriangle size={18} /> 哎呀，上傳失敗了！
                     </div>
                     <textarea 
                         readOnly 
