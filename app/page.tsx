@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ScatterChart, Scatter, ZAxis, LineChart, Line, PieChart, Pie, Cell, ComposedChart
 } from 'recharts';
 import { 
-  Loader2, PieChart as IconPie, Microscope, ListTodo, FileText, Upload, FileUp, 
+  Loader2, PieChart as IconPie, Microscope, ListTodo, Upload, FileUp, 
   Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2, BookOpen,
   Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus
 } from 'lucide-react';
@@ -39,23 +39,26 @@ export default function Dashboard() {
   const [clientList, setClientList] = useState<string[]>([]); 
   
   // Data States
-  const [mergedMonthlyData, setMergedMonthlyData] = useState<any[]>([]); 
+  const [gaRawData, setGaRawData] = useState<any[]>([]);
+  const [txChanData, setTxChanData] = useState<any[]>([]);
+  const [monthlyTxTotal, setMonthlyTxTotal] = useState<any[]>([]);
+  
   const [productData, setProductData] = useState<any[]>([]);
   const [channelData, setChannelData] = useState<any[]>([]);
   const [rfmData, setRfmData] = useState<any[]>([]);
   const [cohortData, setCohortData] = useState<any[]>([]);
   
-  // 漏斗切換模式
+  // 漏斗狀態
   const [funnelMode, setFunnelMode] = useState<'wedding' | 'festival'>('wedding');
   const [funnelDataWedding, setFunnelDataWedding] = useState<any[]>([]); 
   const [funnelDataFestival, setFunnelDataFestival] = useState<any[]>([]); 
   const [gaCategoryData, setGaCategoryData] = useState<any[]>([]); 
   
+  // 雙軌交叉分析模式
+  const [crossMode, setCrossMode] = useState<'all' | 'offline' | 'ec'>('all');
+  
   const [rfmSegments, setRfmSegments] = useState<any[]>([]);
   const [nesData, setNesData] = useState<any[]>([]);
-
-  // 智慧洞察文字
-  const [autoInsightText, setAutoInsightText] = useState("");
 
   const [pulseMetrics, setPulseMetrics] = useState({
       traffic: { value: null as number | null, hasData: false, unit: '人' },      
@@ -77,7 +80,7 @@ export default function Dashboard() {
     try {
         const [{ data: txData }, { data: gaDataRes }] = await Promise.all([
             supabase.from('monthly_brand_pulse').select('client_name'),
-            supabase.from('monthly_ga_metrics').select('client_name')
+            supabase.from('ga_analytics').select('client_name')
         ]);
         const allNames = [...(txData || []), ...(gaDataRes || [])].map(item => item.client_name).filter(Boolean);
         const uniqueClients = Array.from(new Set(allNames));
@@ -92,147 +95,163 @@ export default function Dashboard() {
     if (selectedClient) refreshData(selectedClient);
   }, [selectedClient]);
 
-  // ★ 自動產生智慧文字洞察
-  const generateAutoInsight = (mergedData: any[]) => {
-      if(mergedData.length < 2) return "資料不足，無法產生交叉分析洞察。";
-
-      let maxTrafficMonth = mergedData[0];
-      let maxAppMonth = mergedData[0];
-      let maxRevMonth = mergedData[0];
-      let maxDropMonth = mergedData[0]; 
-      let maxDropVal = -1;
-
-      mergedData.forEach(d => {
-          if((d.active_users || 0) > (maxTrafficMonth.active_users || 0)) maxTrafficMonth = d;
-          if(((d.appointments || 0) + (d.leads || 0)) > ((maxAppMonth.appointments || 0) + (maxAppMonth.leads || 0))) maxAppMonth = d;
-          if((d.total_revenue || 0) > (maxRevMonth.total_revenue || 0)) maxRevMonth = d;
-
-          // 反差指標：流量大，但轉換率極低 (找漏水最大的月份)
-          if((d.active_users || 0) > 1000) {
-              const conversion = ((d.appointments || 0) + (d.leads || 0)) / (d.active_users || 1);
-              const dropRatio = 1 - conversion;
-              if(dropRatio > maxDropVal) {
-                  maxDropVal = dropRatio;
-                  maxDropMonth = d;
+  // ★ 動態構建交叉分析資料 (根據 crossMode 切換)
+  const crossAnalysisData = useMemo(() => {
+      const gaMonthMap: any = {};
+      
+      gaRawData.forEach(g => {
+          const isWedding = (g.category || '').includes('婚禮') || (g.category || '').includes('彌月');
+          const isFestival = !isWedding; // 其他視為節慶/EC
+          
+          if (!gaMonthMap[g.year_month]) gaMonthMap[g.year_month] = { active_users: 0, conversions: 0 };
+          
+          if (crossMode === 'all' || (crossMode === 'offline' && isWedding) || (crossMode === 'ec' && isFestival)) {
+              gaMonthMap[g.year_month].active_users += (Number(g.active_users) || 0);
+              if (crossMode === 'ec' || isFestival) {
+                  gaMonthMap[g.year_month].conversions += (Number(g.leads) || 0);
+              } 
+              if (crossMode === 'offline' || isWedding) {
+                  gaMonthMap[g.year_month].conversions += (Number(g.appointments) || 0);
               }
           }
       });
 
-      const insight = `【智慧數據比對】
-🎯 流量巔峰落在 ${maxTrafficMonth.year_month} (${(maxTrafficMonth.active_users||0).toLocaleString()}人)；但預約/名單轉換最高卻是 ${maxAppMonth.year_month} (${(maxAppMonth.appointments||0) + (maxAppMonth.leads||0)}組)。
-💰 營收高點為 ${maxRevMonth.year_month} ($${((maxRevMonth.total_revenue||0)/10000).toFixed(0)}萬)。
-⚠️ 需特別注意「${maxDropMonth.year_month}」，該月有高達 ${(maxDropMonth.active_users||0).toLocaleString()} 人造訪，卻僅帶來 ${(maxDropMonth.appointments || 0) + (maxDropMonth.leads || 0)} 筆名單 (單位流量產值僅 $${maxDropMonth.rpv?.toFixed(0) || 0})，形成巨大反差，建議檢視該月行銷受眾精準度或活動機制。`;
+      const txMonthMap: any = {};
+      txChanData.forEach(t => {
+          if (!txMonthMap[t.year_month]) txMonthMap[t.year_month] = { revenue: 0 };
+          if (crossMode === 'all' || (crossMode === 'offline' && t.channel_group === 'Offline') || (crossMode === 'ec' && t.channel_group === 'EC')) {
+              txMonthMap[t.year_month].revenue += (Number(t.total_revenue) || 0);
+          }
+      });
 
-      setAutoInsightText(insight);
-  };
+      const allMonths = Array.from(new Set([...Object.keys(txMonthMap), ...Object.keys(gaMonthMap)])).sort();
+      
+      return allMonths.map(month => {
+          const rev = txMonthMap[month]?.revenue || 0;
+          const users = gaMonthMap[month]?.active_users || 0;
+          const convs = gaMonthMap[month]?.conversions || 0;
+          return {
+              year_month: month,
+              revenue: rev,
+              active_users: users,
+              conversions: convs,
+              rpv: users > 0 ? (rev / users) : 0,
+              conv_rate: users > 0 ? (convs / users * 100) : 0
+          };
+      }).filter(d => d.revenue > 0 || d.active_users > 0);
+
+  }, [gaRawData, txChanData, crossMode]);
+
+  // ★ 智慧洞察文字
+  const autoInsightText = useMemo(() => {
+      const data = crossAnalysisData;
+      if(data.length < 2) return "資料不足，無法產生交叉分析洞察。";
+
+      let maxTraffic = data[0], maxConv = data[0], maxRev = data[0], maxDrop = data[0]; 
+      let maxDropVal = -1;
+
+      data.forEach(d => {
+          if(d.active_users > maxTraffic.active_users) maxTraffic = d;
+          if(d.conversions > maxConv.conversions) maxConv = d;
+          if(d.revenue > maxRev.revenue) maxRev = d;
+
+          // 反差指標：流量大(>500)但轉換率低
+          if(d.active_users > 500) {
+              const dropRatio = 1 - (d.conversions / d.active_users);
+              if(dropRatio > maxDropVal) {
+                  maxDropVal = dropRatio;
+                  maxDropDrop = d;
+              }
+          }
+      });
+
+      const modeName = crossMode === 'all' ? '全通路' : (crossMode === 'offline' ? 'O2O實體(婚禮)' : 'EC電商(節慶)');
+      const convLabel = crossMode === 'ec' ? '名單' : '預約';
+
+      return `【${modeName} 智慧數據洞察】
+🎯 流量巔峰落在 ${maxTraffic.year_month} (${maxTraffic.active_users.toLocaleString()}人)；${convLabel}轉換最高落在 ${maxConv.year_month} (${maxConv.conversions}組)。
+💰 營收高點為 ${maxRev.year_month} ($${(maxRev.revenue/10000).toFixed(0)}萬)。
+⚠️ 需注意「${maxDrop.year_month}」，該月有 ${(maxDrop.active_users).toLocaleString()} 人造訪，卻僅帶來 ${maxDrop.conversions} 筆${convLabel} (單位流量產值僅 $${maxDrop.rpv?.toFixed(0) || 0})，形成巨大反差，建議檢視該月行銷受眾精準度。`;
+
+  }, [crossAnalysisData, crossMode]);
 
   const refreshData = async (clientName: string) => {
     setLoading(true);
     try {
         const [
-            { data: monthlyTxRaw }, { data: retRaw }, { data: gaRaw }, { data: gaCatRaw }
+            { data: monthlyTxRaw }, { data: retRaw }, { data: gaCatRaw }, { data: chanFunnelRaw }, { data: monthlyChanRaw }
         ] = await Promise.all([
             supabase.from('monthly_brand_pulse').select('*').eq('client_name', clientName).order('year_month', { ascending: true }),
             supabase.from('customer_retention_stats').select('*').eq('client_name', clientName),
-            supabase.from('monthly_ga_metrics').select('*').eq('client_name', clientName).order('year_month', { ascending: true }),
-            supabase.from('ga_analytics').select('*').eq('client_name', clientName) 
+            supabase.from('ga_analytics').select('*').eq('client_name', clientName).order('year_month', { ascending: true }),
+            supabase.from('channel_funnel_stats').select('*').eq('client_name', clientName),
+            supabase.from('monthly_channel_metrics').select('*').eq('client_name', clientName)
         ]);
 
         const mData = monthlyTxRaw || [];
-        const gData = gaRaw || [];
         const gaRawItems = gaCatRaw || [];
+        const chanFunnel = chanFunnelRaw || [];
+        
+        setMonthlyTxTotal(mData);
+        setGaRawData(gaRawItems);
+        setTxChanData(monthlyChanRaw || []);
 
-        // 1. 處理合併月資料 (趨勢圖與對照表用)
-        const gaMonthMap: any = {};
-        gData.forEach(g => {
-            gaMonthMap[g.year_month] = {
-                active_users: Number(g.total_active_users) || 0,
-                appointments: Number(g.total_appointments) || 0,
-                leads: Number(g.total_leads) || 0
-            };
-        });
+        // 1. 精準拆分 O2O(婚禮/彌月) 與 EC(節慶) 漏斗資料
+        let w_traffic = 0, w_appt = 0;
+        let f_traffic = 0, f_leads = 0;
+        let w_sales = 0, w_repeat = 0;
+        let f_sales = 0, f_repeat = 0;
 
-        const allMonths = Array.from(new Set([...mData.map(m => m.year_month), ...gData.map(g => g.year_month)])).sort();
-        const mergedTrend = allMonths.map(month => {
-            const txMatch = mData.find(m => m.year_month === month) || { total_revenue: 0, old_customer_revenue: 0, new_customer_revenue: 0, aov: 0 };
-            const gaMatch = gaMonthMap[month] || { active_users: 0, appointments: 0, leads: 0 };
-            const rpv = gaMatch.active_users > 0 ? (txMatch.total_revenue / gaMatch.active_users) : 0;
-            return {
-                year_month: month,
-                total_revenue: txMatch.total_revenue,
-                aov: txMatch.aov,
-                old_customer_revenue: txMatch.old_customer_revenue,
-                new_customer_revenue: txMatch.new_customer_revenue,
-                active_users: gaMatch.active_users,
-                appointments: gaMatch.appointments,
-                leads: gaMatch.leads,
-                rpv: rpv // ★ 流量與營收比值 (Revenue Per Visitor)
-            };
-        });
-        setMergedMonthlyData(mergedTrend);
-        generateAutoInsight(mergedTrend);
-
-        // 2. ★ 修正：精準拆分 O2O(婚禮/彌月) 與 EC(節慶) 漏斗資料
-        let w_traffic = 0, w_appt = 0, w_sales = 0, w_repeat = 0;
-        let f_traffic = 0, f_leads = 0, f_sales = 0, f_repeat = 0;
-
+        // GA 流量與預約名單拆分
         gaRawItems.forEach(item => {
             const cat = item.category || '';
             const users = Number(item.active_users) || 0;
-            const appts = Number(item.appointments) || 0;
-            const leads = Number(item.leads) || 0;
-            
-            // 只要不是婚禮彌月，一律視為節慶或其他 EC 導流
             if(cat.includes('婚禮') || cat.includes('彌月')) {
                 w_traffic += users;
+                w_appt += Number(item.appointments) || 0;
             } else {
                 f_traffic += users;
+                f_leads += Number(item.leads) || 0;
             }
-            
-            // 預約與名單有明確欄位，直接相加不依賴字串比對
-            w_appt += appts;
-            f_leads += leads;
         });
 
-        const totalCustomers = retRaw?.length || 0;
-        const repeatCustomers = retRaw?.filter(c => c.purchase_days > 1).length || 0;
-        const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
-        
-        // 依照前端帶來的漏斗佔比，分配實際成交數據
-        const apptWeight = (w_appt + f_leads) > 0 ? w_appt / (w_appt + f_leads) : 0.5;
-        w_sales = Math.round(totalCustomers * apptWeight);
-        f_sales = totalCustomers - w_sales;
-        w_repeat = Math.round(repeatCustomers * apptWeight);
-        f_repeat = repeatCustomers - w_repeat;
+        // TX 真實獨立客數拆分 (直接從 View 撈取，不依賴粗略比例)
+        chanFunnel.forEach(r => {
+            if(r.channel_group === 'EC') {
+                f_sales += Number(r.total_customers) || 0;
+                f_repeat += Number(r.repeat_customers) || 0;
+            } else {
+                w_sales += Number(r.total_customers) || 0;
+                w_repeat += Number(r.repeat_customers) || 0;
+            }
+        });
 
         setFunnelDataWedding([
-            { name: '1. 活躍流量', value: Math.round(w_traffic), fill: '#3b82f6' },
-            { name: '2. 門市預約', value: w_appt, fill: '#10b981' },
-            { name: '3. 到店成交', value: w_sales, fill: '#f59e0b' },
-            { name: '4. 忠誠回購', value: w_repeat, fill: '#ef4444' }
+            { name: '1. 活躍流量(GA)', value: Math.round(w_traffic), fill: '#3b82f6' },
+            { name: '2. 門市預約(GA)', value: w_appt, fill: '#10b981' },
+            { name: '3. 實體成交客(TX)', value: w_sales, fill: '#f59e0b' },
+            { name: '4. 實體回購客(TX)', value: w_repeat, fill: '#ef4444' }
         ].filter(v => v.value > 0));
 
         setFunnelDataFestival([
-            { name: '1. 活躍流量', value: Math.round(f_traffic), fill: '#8b5cf6' },
-            { name: '2. 節慶名單', value: f_leads, fill: '#14b8a6' },
-            { name: '3. 電商成交', value: f_sales, fill: '#eab308' },
-            { name: '4. 節慶回購', value: f_repeat, fill: '#f43f5e' }
+            { name: '1. 活躍流量(GA)', value: Math.round(f_traffic), fill: '#8b5cf6' },
+            { name: '2. 節慶名單(GA)', value: f_leads, fill: '#14b8a6' },
+            { name: '3. 電商成交客(TX)', value: f_sales, fill: '#eab308' },
+            { name: '4. 電商回購客(TX)', value: f_repeat, fill: '#f43f5e' }
         ].filter(v => v.value > 0));
 
-        // 3. 其他基礎 KPI
+        // 2. 計算基礎 KPI
         const totalRev = mData.reduce((acc, cur) => acc + (cur.total_revenue || 0), 0);
         const totalOrd = mData.reduce((acc, cur) => acc + (cur.order_count || 0), 0);
         const avgAov = totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0;
-        const totalActiveUsers = gData.reduce((acc, cur) => acc + (Number(cur.total_active_users) || 0), 0);
-        const totalConversions = gData.reduce((acc, cur) => acc + (Number(cur.total_appointments) || 0) + (Number(cur.total_leads) || 0), 0);
-        const overallConversionRate = totalActiveUsers > 0 ? (totalConversions / totalActiveUsers) * 100 : null;
+        
+        const totalCustomers = retRaw?.length || 0;
+        const repeatCustomers = retRaw?.filter(c => c.purchase_days > 1).length || 0;
+        const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
 
-        const catMap: any = {};
-        (gaCatRaw || []).forEach(c => {
-            const cat = c.category || '未分類';
-            catMap[cat] = (catMap[cat] || 0) + (Number(c.active_users) || 0);
-        });
-        setGaCategoryData(Object.entries(catMap).map(([name, value]) => ({ name, value })).sort((a:any, b:any) => b.value - a.value));
+        const totalActiveUsers = gaRawItems.reduce((acc, cur) => acc + (Number(cur.active_users) || 0), 0);
+        const totalConversions = w_appt + f_leads;
+        const overallConversionRate = totalActiveUsers > 0 ? (totalConversions / totalActiveUsers) * 100 : null;
 
         setPulseMetrics({
             traffic: { value: totalActiveUsers > 0 ? totalActiveUsers : null, hasData: totalActiveUsers > 0, unit: '人' }, 
@@ -243,7 +262,15 @@ export default function Dashboard() {
             reputation: { value: null, hasData: false, unit: '分' } 
         });
 
-        // 4. Product, Channel, RFM, Cohort
+        // 3. GA 圓餅圖分類
+        const catMap: any = {};
+        gaRawItems.forEach(c => {
+            const cat = c.category || '未分類';
+            catMap[cat] = (catMap[cat] || 0) + (Number(c.active_users) || 0);
+        });
+        setGaCategoryData(Object.entries(catMap).map(([name, value]) => ({ name, value })).sort((a:any, b:any) => b.value - a.value));
+
+        // 4. 其他深度圖表 (Product, Channel, RFM, Cohort)
         const { data: prodRaw } = await supabase.from('product_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false }).limit(10);
         setProductData((prodRaw || []).map(p => ({ name: p.product_name, value: p.total_revenue })));
 
@@ -363,12 +390,6 @@ export default function Dashboard() {
                     <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
                     <p className="text-sm text-slate-500">以六脈指標動態評估品牌健康度</p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                        <button className="px-3 py-1 text-sm font-bold bg-white shadow rounded text-slate-800">全部期間</button>
-                        <button className="px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50" disabled>本年對比</button>
-                    </div>
-                </div>
             </div>
 
             {loading ? <LoadingSkeleton /> : (
@@ -383,30 +404,33 @@ export default function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* ★★★ V14.0 雙軌交叉分析圖表 ★★★ */}
                     <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold text-slate-800">營收、流量與預約轉換趨勢 (Cross-Analysis)</h3>
-                            <span className="text-xs font-bold bg-blue-100 text-blue-600 px-2 py-1 rounded">獨立比例尺 (雙Y軸)</span>
+                            <h3 className="text-lg font-bold text-slate-800">雙軌營收與流量趨勢 (Cross-Analysis)</h3>
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                <button onClick={()=>setCrossMode('all')} className={`px-3 py-1 text-xs font-bold rounded ${crossMode==='all'?'bg-white shadow text-slate-800':'text-slate-500'}`}>全通路</button>
+                                <button onClick={()=>setCrossMode('offline')} className={`px-3 py-1 text-xs font-bold rounded ${crossMode==='offline'?'bg-white shadow text-slate-800':'text-slate-500'}`}>O2O實體</button>
+                                <button onClick={()=>setCrossMode('ec')} className={`px-3 py-1 text-xs font-bold rounded ${crossMode==='ec'?'bg-white shadow text-slate-800':'text-slate-500'}`}>EC電商</button>
+                            </div>
                         </div>
                         <div className="flex-1 min-h-[300px]">
                             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                                <ComposedChart data={mergedMonthlyData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                <ComposedChart data={crossAnalysisData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
-                                    
                                     <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/10000).toFixed(0)}w`} />
-                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${val}組`} domain={['auto', 'auto']} />
+                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${val}`} domain={['auto', 'auto']} />
                                     
                                     <Tooltip formatter={(val: any, name: any) => (name||'').includes('營收') ? `$${Number(val).toLocaleString()}` : `${Number(val).toLocaleString()} 人/組`} />
                                     <Legend />
                                     
-                                    <Bar yAxisId="left" dataKey="total_revenue" fill="#3b82f6" name="總營收 (左軸)" radius={[4,4,0,0]} barSize={30} />
-                                    <Line yAxisId="right" type="monotone" dataKey="appointments" stroke="#10b981" strokeWidth={3} name="O2O預約數 (右軸)" dot={{ r: 4 }} />
-                                    <Line yAxisId="right" type="monotone" dataKey="leads" stroke="#f59e0b" strokeWidth={3} strokeDasharray="5 5" name="EC名單數 (右軸)" dot={{ r: 4 }} />
+                                    <Bar yAxisId="left" dataKey="revenue" fill="#3b82f6" name="產生營收 (左軸)" radius={[4,4,0,0]} barSize={30} />
+                                    <Line yAxisId="right" type="monotone" dataKey="active_users" stroke="#8b5cf6" strokeWidth={3} name="活躍流量 (右軸)" dot={{ r: 4 }} />
+                                    <Line yAxisId="right" type="monotone" dataKey="conversions" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" name={crossMode==='ec'?'名單數 (右軸)':'預約數 (右軸)'} dot={{ r: 4 }} />
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>
-                        {/* 智慧洞察文字區域 */}
                         {autoInsightText && (
                             <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
                                 {autoInsightText}
@@ -417,10 +441,12 @@ export default function Dashboard() {
                     <AiDiagnosisPanel clientName={selectedClient} revenue={pulseMetrics.profit.value} rfmSegments={rfmSegments} nesData={nesData} topProducts={productData} />
                 </div>
 
-                {/* ★★★ V12.0 新增：流量與營收交叉對照表 (RPV) ★★★ */}
+                {/* ★★★ V14.0 雙軌 RPV 對照表 ★★★ */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-slate-50 flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-slate-800">流量與營收交叉對照表</h3>
+                        <h3 className="text-lg font-bold text-slate-800">
+                            流量與營收交叉對照表 ({crossMode === 'all' ? '全通路' : crossMode === 'offline' ? 'O2O實體' : 'EC電商'})
+                        </h3>
                         <span className="text-xs text-slate-500 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">單位流量產值 (RPV) 分析</span>
                     </div>
                     <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
@@ -429,29 +455,25 @@ export default function Dashboard() {
                                 <tr>
                                     <th className="p-3 font-semibold text-left pl-6">月份</th>
                                     <th className="p-3 font-semibold text-right">活躍流量 (A)</th>
-                                    <th className="p-3 font-semibold text-right">名單/預約數 (B)</th>
-                                    <th className="p-3 font-semibold text-right">總營收 (C)</th>
-                                    <th className="p-3 font-semibold text-right text-indigo-600 bg-indigo-50/50">流量營收比 (C/A)</th>
-                                    <th className="p-3 font-semibold text-right text-teal-600">流量留單率 (B/A)</th>
+                                    <th className="p-3 font-semibold text-right">{crossMode==='ec'?'名單數':'預約數'} (B)</th>
+                                    <th className="p-3 font-semibold text-right">產生營收 (C)</th>
+                                    <th className="p-3 font-semibold text-right text-indigo-600 bg-indigo-50/50">流量產值 RPV (C/A)</th>
+                                    <th className="p-3 font-semibold text-right text-teal-600">留單率 (B/A)</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {mergedMonthlyData.map((d, i) => {
-                                    const totalConv = (d.appointments || 0) + (d.leads || 0);
-                                    const convRate = d.active_users > 0 ? ((totalConv / d.active_users) * 100).toFixed(2) : '0.00';
-                                    return (
-                                        <tr key={i} className="border-b border-gray-50 hover:bg-slate-50 transition-colors">
-                                            <td className="p-3 text-left pl-6 font-mono text-slate-600">{d.year_month}</td>
-                                            <td className="p-3 text-right">{d.active_users.toLocaleString()} 人</td>
-                                            <td className="p-3 text-right">{totalConv.toLocaleString()} 組</td>
-                                            <td className="p-3 text-right">${d.total_revenue.toLocaleString()}</td>
-                                            <td className="p-3 text-right font-bold text-indigo-600 bg-indigo-50/30">
-                                                ${(d.rpv || 0).toFixed(0)} <span className="text-xs text-slate-400 font-normal">/ 人</span>
-                                            </td>
-                                            <td className="p-3 text-right font-bold text-teal-600">{convRate}%</td>
-                                        </tr>
-                                    );
-                                })}
+                                {crossAnalysisData.map((d, i) => (
+                                    <tr key={i} className="border-b border-gray-50 hover:bg-slate-50 transition-colors">
+                                        <td className="p-3 text-left pl-6 font-mono text-slate-600">{d.year_month}</td>
+                                        <td className="p-3 text-right">{d.active_users.toLocaleString()} 人</td>
+                                        <td className="p-3 text-right">{d.conversions.toLocaleString()} 組</td>
+                                        <td className="p-3 text-right">${d.revenue.toLocaleString()}</td>
+                                        <td className="p-3 text-right font-bold text-indigo-600 bg-indigo-50/30">
+                                            ${(d.rpv || 0).toFixed(0)} <span className="text-xs text-slate-400 font-normal">/ 人</span>
+                                        </td>
+                                        <td className="p-3 text-right font-bold text-teal-600">{d.conv_rate.toFixed(2)}%</td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
@@ -467,13 +489,12 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* ★★★ V12.0 重大升級：客製化高階商業漏斗 ★★★ */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[400px]">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-lg font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">流量變現漏斗 (Funnel)</h3>
                         <div className="flex bg-slate-100 p-1 rounded-lg">
-                            <button onClick={()=>setFunnelMode('wedding')} className={`px-3 py-1 text-sm font-bold rounded transition-all ${funnelMode==='wedding'?'bg-white shadow text-slate-800':'text-slate-500'}`}>O2O 婚禮</button>
-                            <button onClick={()=>setFunnelMode('festival')} className={`px-3 py-1 text-sm font-bold rounded transition-all ${funnelMode==='festival'?'bg-white shadow text-slate-800':'text-slate-500'}`}>EC 節慶</button>
+                            <button onClick={()=>setFunnelMode('wedding')} className={`px-3 py-1 text-sm font-bold rounded transition-all ${funnelMode==='wedding'?'bg-white shadow text-slate-800':'text-slate-500'}`}>O2O 實體</button>
+                            <button onClick={()=>setFunnelMode('festival')} className={`px-3 py-1 text-sm font-bold rounded transition-all ${funnelMode==='festival'?'bg-white shadow text-slate-800':'text-slate-500'}`}>EC 電商</button>
                         </div>
                     </div>
                     
@@ -578,17 +599,32 @@ export default function Dashboard() {
 
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} rfmSegments={rfmSegments} nesData={nesData} />}
 
+        {/* ★★★ V14.0 重大升級：全數據大辭典 ★★★ */}
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據定義與計算公式 (V12.0)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據大辭典與計算公式 (V14.0 完整版)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
-                            <h3 className="font-bold text-lg mb-4 text-slate-700">深度交叉分析邏輯</h3>
+                            <h3 className="font-bold text-lg mb-4 text-indigo-700 border-b border-indigo-100 pb-2">【基礎六脈指標】</h3>
                             <ul className="space-y-4">
-                                <SpecItem title="O2O 婚禮漏斗" logic="活躍流量 ➡️ 門市預約數 ➡️ 到店成交數 ➡️ 忠誠回購數" desc="分析從線上瀏覽到線下預約試吃的轉換損耗。" />
-                                <SpecItem title="EC 節慶漏斗" logic="活躍流量 ➡️ 節慶名單 ➡️ 電商成交數 ➡️ 節慶回購數" desc="分析直接在網路上獲取名單並轉換下單的效率。" />
-                                <SpecItem title="單位流量產值 (RPV)" logic="總營收 / 活躍流量" desc="反映每一個進站的顧客，平均能為品牌創造多少真實營收。" />
+                                <SpecItem title="流量脈 (Traffic)" logic="總活躍使用者 / 總行銷費用" desc="衡量網站流量與獲客成本。 🚩 註：請在上傳 GA 數據時，於未來加入行銷費用(Marketing Spend)以計算 ROI。" />
+                                <SpecItem title="轉換脈 (Conversion)" logic="(預約數 + 名單數) / 總活躍使用者" desc="衡量進站後成功留單的比率。" />
+                                <SpecItem title="獲利脈 (Profit)" logic="SUM(Transactions.Amount)" desc="品牌的總營收。過濾掉退貨與零元訂單的淨額。" />
+                                <SpecItem title="金主脈 (VIP)" logic="總營收 / 總訂單數" desc="每月的平均客單價 (AOV)。" />
+                                <SpecItem title="老主脈 (Retention)" logic="購買 2 次以上人數 / 總客戶數" desc="歷史區間內的回購黏著度。" />
+                                <SpecItem title="擁主脈 (Reputation)" logic="NPS 分數 / 推薦產生之業績" desc="衡量口碑擴散力。(需補充問卷與推薦碼數據)" />
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg mb-4 text-teal-700 border-b border-teal-100 pb-2">【進階交叉分析與模型】</h3>
+                            <ul className="space-y-4">
+                                <SpecItem title="O2O 實體漏斗" logic="GA婚禮彌月流量 ➡️ 門市預約 ➡️ 實體成交客(TX) ➡️ 實體回購客" desc="分析從線上瀏覽到線下門市試吃的轉換損耗。" />
+                                <SpecItem title="EC 電商漏斗" logic="GA節慶名單流量 ➡️ 節慶名單 ➡️ EC成交客(TX) ➡️ EC回購客" desc="分析直接在網路上獲取名單並轉換電商下單的效率。" />
+                                <SpecItem title="漏水率 (Drop-off)" logic="1 - (本層數量 / 上一層數量)" desc="在漏斗圖中可視化，精確找出客戶在哪個行銷節點流失。" />
+                                <SpecItem title="單位流量產值 (RPV)" logic="對應通路總營收 / 對應通路活躍流量" desc="Revenue Per Visitor。反映每一個進站的顧客，平均能為品牌創造多少真實營收。" />
+                                <SpecItem title="RFM 模型分群" logic="Recency (天數) x Frequency (次數) x Monetary (累積金額)" desc="定義五大黃金客群：頂級大使、潛力新星、穩定常客、沉睡大戶、流失過客。" />
+                                <SpecItem title="NES 生命週期" logic="N: 新客(<120天) / E: 活躍客(回購) / S: 沉睡客(>200天)" desc="宏觀檢視品牌目前的獲客健康度與流失危機。" />
                             </ul>
                         </div>
                     </div>
@@ -596,7 +632,6 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* === Page 4: Upload === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in">
                 <div className="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
@@ -614,33 +649,25 @@ export default function Dashboard() {
   );
 }
 
-// --- Sub-Components (Fully Expanded for Readability) ---
+// --- Sub-Components ---
 
-// ★★★ V12.0 新增：客製化高階商業漏斗 (解決數量級與轉換率痛點) ★★★
 function CustomFunnel({ data }: { data: any[] }) {
     if (!data || data.length === 0) return <EmptyState message="無此模式資料" />;
     
-    // 以第一層 (總流量) 作為分母基準
     const topValue = data[0].value;
 
     return (
         <div className="w-full flex flex-col items-center justify-center space-y-1 py-4">
             {data.map((step: any, index: number) => {
-                // 計算與上一層的差異
                 const prevValue = index > 0 ? data[index - 1].value : null;
                 const stepConv = prevValue ? ((step.value / prevValue) * 100).toFixed(1) : '100.0';
-                
-                // 計算與最上層的差異
                 const totalConv = topValue ? ((step.value / topValue) * 100).toFixed(1) : '100.0';
                 
-                // 視覺寬度計算：為了避免數量級差異過大導致圖形小到看不見，設定最低寬度為 30%
                 const trueRatio = step.value / topValue;
                 const visualWidth = Math.max(30, trueRatio * 100); 
 
                 return (
                     <div key={index} className="w-full flex flex-col items-center">
-                        
-                        {/* 階層之間的箭頭與漏水率提示 (從第二層開始顯示) */}
                         {index > 0 && (
                             <div className="flex flex-col items-center justify-center my-1 z-10">
                                 <div className="bg-white border border-slate-200 text-slate-500 text-[10px] sm:text-xs px-3 py-1 rounded-full shadow-sm flex items-center gap-2">
@@ -652,15 +679,9 @@ function CustomFunnel({ data }: { data: any[] }) {
                                 <div className="w-2 h-2 border-b-2 border-r-2 border-slate-300 transform rotate-45 -mt-1 mb-1"></div>
                             </div>
                         )}
-                        
-                        {/* 漏斗的實體色塊 */}
                         <div 
                             className="flex justify-between items-center px-4 py-3 rounded-lg shadow-md text-white transition-all duration-500 hover:brightness-110"
-                            style={{ 
-                                width: `${visualWidth}%`, 
-                                minWidth: '260px', 
-                                backgroundColor: step.fill 
-                            }}
+                            style={{ width: `${visualWidth}%`, minWidth: '260px', backgroundColor: step.fill }}
                         >
                             <span className="font-bold text-sm sm:text-base mr-2 flex items-center gap-2">
                                 <span className="bg-white/30 px-2 py-0.5 rounded-full text-xs">{index + 1}</span>
