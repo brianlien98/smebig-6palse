@@ -60,6 +60,9 @@ export default function Dashboard() {
   const [rfmSegments, setRfmSegments] = useState<any[]>([]);
   const [nesData, setNesData] = useState<any[]>([]);
 
+  // 智慧洞察文字
+  const [autoInsightText, setAutoInsightText] = useState("");
+
   const [pulseMetrics, setPulseMetrics] = useState({
       traffic: { value: null as number | null, hasData: false, unit: '人' },      
       conversion: { value: null as number | null, hasData: false, unit: '%' },    
@@ -160,7 +163,7 @@ export default function Dashboard() {
               const dropRatio = 1 - (d.conversions / d.active_users);
               if(dropRatio > maxDropVal) {
                   maxDropVal = dropRatio;
-                  maxDrop = d; // ★ 修復了 maxDropDrop 的 Typo 錯誤
+                  maxDrop = d; 
               }
           }
       });
@@ -196,13 +199,12 @@ export default function Dashboard() {
         setGaRawData(gaRawItems);
         setTxChanData(monthlyChanRaw || []);
 
-        // 1. 精準拆分 O2O(婚禮/彌月) 與 EC(節慶) 漏斗資料
+        // 1. 精準拆分 O2O 與 EC 漏斗資料
         let w_traffic = 0, w_appt = 0;
         let f_traffic = 0, f_leads = 0;
         let w_sales = 0, w_repeat = 0;
         let f_sales = 0, f_repeat = 0;
 
-        // GA 流量與預約名單拆分
         gaRawItems.forEach(item => {
             const cat = item.category || '';
             const users = Number(item.active_users) || 0;
@@ -215,7 +217,6 @@ export default function Dashboard() {
             }
         });
 
-        // TX 真實獨立客數拆分 (直接從 View 撈取)
         chanFunnel.forEach(r => {
             if(r.channel_group === 'EC') {
                 f_sales += Number(r.total_customers) || 0;
@@ -404,6 +405,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* ★★★ V14.2：解決數量級問題，加入第三根獨立 Y 軸 ★★★ */}
                     <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-slate-800">雙軌營收與流量趨勢 (Cross-Analysis)</h3>
@@ -418,15 +420,24 @@ export default function Dashboard() {
                                 <ComposedChart data={crossAnalysisData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
+                                    
+                                    {/* 左 Y 軸：營收 (藍色長條) */}
                                     <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/10000).toFixed(0)}w`} />
-                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${val}`} domain={['auto', 'auto']} />
+                                    
+                                    {/* 右 Y 軸 1：流量 (紫色實線，數量級大) */}
+                                    <YAxis yAxisId="right_traffic" orientation="right" tickFormatter={(val) => `${(val/1000).toFixed(1)}k`} />
+                                    
+                                    {/* 右 Y 軸 2：預約名單 (綠色虛線，數量級小) -> 隱藏座標軸，讓圖表自動將曲線撐開 */}
+                                    <YAxis yAxisId="right_conv" orientation="right" hide={true} domain={['auto', 'auto']} />
                                     
                                     <Tooltip formatter={(val: any, name: any) => (name||'').includes('營收') ? `$${Number(val).toLocaleString()}` : `${Number(val).toLocaleString()} 人/組`} />
                                     <Legend />
                                     
                                     <Bar yAxisId="left" dataKey="revenue" fill="#3b82f6" name="產生營收 (左軸)" radius={[4,4,0,0]} barSize={30} />
-                                    <Line yAxisId="right" type="monotone" dataKey="active_users" stroke="#8b5cf6" strokeWidth={3} name="活躍流量 (右軸)" dot={{ r: 4 }} />
-                                    <Line yAxisId="right" type="monotone" dataKey="conversions" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" name={crossMode==='ec'?'名單數 (右軸)':'預約數 (右軸)'} dot={{ r: 4 }} />
+                                    <Line yAxisId="right_traffic" type="monotone" dataKey="active_users" stroke="#8b5cf6" strokeWidth={3} name="活躍流量 (右軸)" dot={{ r: 4 }} />
+                                    
+                                    {/* 綁定獨立的 right_conv 軸，徹底解決變成平線的問題 */}
+                                    <Line yAxisId="right_conv" type="monotone" dataKey="conversions" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" name={crossMode==='ec'?'名單數 (趨勢比例)':'預約數 (趨勢比例)'} dot={{ r: 4 }} />
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>
@@ -606,7 +617,7 @@ export default function Dashboard() {
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據大辭典與計算公式 (V14.1 完整版)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據大辭典與計算公式 (V14.2 完整版)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-indigo-700 border-b border-indigo-100 pb-2">【基礎六脈指標】</h3>
