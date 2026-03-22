@@ -85,12 +85,14 @@ export default function Dashboard() {
         if (!selectedClient && uniqueClients.length > 0) setSelectedClient(uniqueClients[0] as string);
     } catch (e) { console.error("Fetch clients error:", e); }
   };
+
   useEffect(() => { fetchClients(); }, []);
 
   useEffect(() => {
     if (selectedClient) refreshData(selectedClient);
   }, [selectedClient]);
 
+  // ★ 自動產生智慧文字洞察
   const generateAutoInsight = (mergedData: any[]) => {
       if(mergedData.length < 2) return "資料不足，無法產生交叉分析洞察。";
 
@@ -102,10 +104,10 @@ export default function Dashboard() {
 
       mergedData.forEach(d => {
           if((d.active_users || 0) > (maxTrafficMonth.active_users || 0)) maxTrafficMonth = d;
-          if((d.appointments || 0) > (maxAppMonth.appointments || 0)) maxAppMonth = d;
+          if(((d.appointments || 0) + (d.leads || 0)) > ((maxAppMonth.appointments || 0) + (maxAppMonth.leads || 0))) maxAppMonth = d;
           if((d.total_revenue || 0) > (maxRevMonth.total_revenue || 0)) maxRevMonth = d;
 
-          // 反差指標：流量大，但轉換率極低
+          // 反差指標：流量大，但轉換率極低 (找漏水最大的月份)
           if((d.active_users || 0) > 1000) {
               const conversion = ((d.appointments || 0) + (d.leads || 0)) / (d.active_users || 1);
               const dropRatio = 1 - conversion;
@@ -117,9 +119,9 @@ export default function Dashboard() {
       });
 
       const insight = `【智慧數據比對】
-🎯 流量巔峰落在 ${maxTrafficMonth.year_month} (${(maxTrafficMonth.active_users||0).toLocaleString()}人)；但預約轉換最優落在 ${maxAppMonth.year_month} (${maxAppMonth.appointments||0}組)。
+🎯 流量巔峰落在 ${maxTrafficMonth.year_month} (${(maxTrafficMonth.active_users||0).toLocaleString()}人)；但預約/名單轉換最高卻是 ${maxAppMonth.year_month} (${(maxAppMonth.appointments||0) + (maxAppMonth.leads||0)}組)。
 💰 營收高點為 ${maxRevMonth.year_month} ($${((maxRevMonth.total_revenue||0)/10000).toFixed(0)}萬)。
-⚠️ 需要注意的是 ${maxDropMonth.year_month}，該月雖然有 ${(maxDropMonth.active_users||0).toLocaleString()} 人造訪，卻僅帶來 ${(maxDropMonth.appointments || 0) + (maxDropMonth.leads || 0)} 筆留單，漏水率(反差)最大，建議檢視該月導流的受眾精準度或落地頁動線。`;
+⚠️ 需特別注意「${maxDropMonth.year_month}」，該月有高達 ${(maxDropMonth.active_users||0).toLocaleString()} 人造訪，卻僅帶來 ${(maxDropMonth.appointments || 0) + (maxDropMonth.leads || 0)} 筆名單 (單位流量產值僅 $${maxDropMonth.rpv?.toFixed(0) || 0})，形成巨大反差，建議檢視該月行銷受眾精準度或活動機制。`;
 
       setAutoInsightText(insight);
   };
@@ -140,7 +142,7 @@ export default function Dashboard() {
         const gData = gaRaw || [];
         const gaRawItems = gaCatRaw || [];
 
-        // 1. 處理合併月資料 (趨勢圖用)
+        // 1. 處理合併月資料 (趨勢圖與對照表用)
         const gaMonthMap: any = {};
         gData.forEach(g => {
             gaMonthMap[g.year_month] = {
@@ -154,6 +156,7 @@ export default function Dashboard() {
         const mergedTrend = allMonths.map(month => {
             const txMatch = mData.find(m => m.year_month === month) || { total_revenue: 0, old_customer_revenue: 0, new_customer_revenue: 0, aov: 0 };
             const gaMatch = gaMonthMap[month] || { active_users: 0, appointments: 0, leads: 0 };
+            const rpv = gaMatch.active_users > 0 ? (txMatch.total_revenue / gaMatch.active_users) : 0;
             return {
                 year_month: month,
                 total_revenue: txMatch.total_revenue,
@@ -162,34 +165,40 @@ export default function Dashboard() {
                 new_customer_revenue: txMatch.new_customer_revenue,
                 active_users: gaMatch.active_users,
                 appointments: gaMatch.appointments,
-                leads: gaMatch.leads
+                leads: gaMatch.leads,
+                rpv: rpv // ★ 流量與營收比值 (Revenue Per Visitor)
             };
         });
         setMergedMonthlyData(mergedTrend);
         generateAutoInsight(mergedTrend);
 
-        // 2. 拆分 O2O(婚禮/彌月) 與 EC(節慶) 漏斗資料
+        // 2. ★ 修正：精準拆分 O2O(婚禮/彌月) 與 EC(節慶) 漏斗資料
         let w_traffic = 0, w_appt = 0, w_sales = 0, w_repeat = 0;
         let f_traffic = 0, f_leads = 0, f_sales = 0, f_repeat = 0;
 
         gaRawItems.forEach(item => {
             const cat = item.category || '';
             const users = Number(item.active_users) || 0;
+            const appts = Number(item.appointments) || 0;
+            const leads = Number(item.leads) || 0;
+            
+            // 只要不是婚禮彌月，一律視為節慶或其他 EC 導流
             if(cat.includes('婚禮') || cat.includes('彌月')) {
                 w_traffic += users;
-                w_appt += Number(item.appointments) || 0;
-            } else if (cat.includes('節慶')) {
-                f_traffic += users;
-                f_leads += Number(item.leads) || 0;
             } else {
-                w_traffic += (users / 2); f_traffic += (users / 2);
+                f_traffic += users;
             }
+            
+            // 預約與名單有明確欄位，直接相加不依賴字串比對
+            w_appt += appts;
+            f_leads += leads;
         });
 
         const totalCustomers = retRaw?.length || 0;
         const repeatCustomers = retRaw?.filter(c => c.purchase_days > 1).length || 0;
         const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
         
+        // 依照前端帶來的漏斗佔比，分配實際成交數據
         const apptWeight = (w_appt + f_leads) > 0 ? w_appt / (w_appt + f_leads) : 0.5;
         w_sales = Math.round(totalCustomers * apptWeight);
         f_sales = totalCustomers - w_sales;
@@ -385,18 +394,15 @@ export default function Dashboard() {
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
                                     
-                                    {/* 左 Y 軸：營收 */}
                                     <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/10000).toFixed(0)}w`} />
-                                    
-                                    {/* 右 Y 軸：預約與名單 */}
-                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${val}`} domain={['auto', 'auto']} />
+                                    <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${val}組`} domain={['auto', 'auto']} />
                                     
                                     <Tooltip formatter={(val: any, name: any) => (name||'').includes('營收') ? `$${Number(val).toLocaleString()}` : `${Number(val).toLocaleString()} 人/組`} />
                                     <Legend />
                                     
                                     <Bar yAxisId="left" dataKey="total_revenue" fill="#3b82f6" name="總營收 (左軸)" radius={[4,4,0,0]} barSize={30} />
-                                    <Line yAxisId="right" type="monotone" dataKey="active_users" stroke="#8b5cf6" strokeWidth={3} name="活躍使用者 (右軸)" dot={{ r: 4 }} />
-                                    <Line yAxisId="right" type="monotone" dataKey="appointments" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" name="預約/名單數 (右軸)" dot={{ r: 4 }} />
+                                    <Line yAxisId="right" type="monotone" dataKey="appointments" stroke="#10b981" strokeWidth={3} name="O2O預約數 (右軸)" dot={{ r: 4 }} />
+                                    <Line yAxisId="right" type="monotone" dataKey="leads" stroke="#f59e0b" strokeWidth={3} strokeDasharray="5 5" name="EC名單數 (右軸)" dot={{ r: 4 }} />
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>
@@ -411,26 +417,41 @@ export default function Dashboard() {
                     <AiDiagnosisPanel clientName={selectedClient} revenue={pulseMetrics.profit.value} rfmSegments={rfmSegments} nesData={nesData} topProducts={productData} />
                 </div>
 
+                {/* ★★★ V12.0 新增：流量與營收交叉對照表 (RPV) ★★★ */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-slate-50">
-                        <h3 className="text-lg font-bold text-slate-800">六脈狀態概覽</h3>
+                    <div className="p-4 border-b border-gray-100 bg-slate-50 flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-800">流量與營收交叉對照表</h3>
+                        <span className="text-xs text-slate-500 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">單位流量產值 (RPV) 分析</span>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-white text-slate-500 border-b border-gray-200">
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                        <table className="w-full text-center text-sm">
+                            <thead className="bg-white text-slate-500 border-b border-gray-200 sticky top-0 shadow-sm z-10">
                                 <tr>
-                                    <th className="p-4 font-semibold">指標 (Pulse)</th>
-                                    <th className="p-4 font-semibold">全期累計</th>
-                                    <th className="p-4 font-semibold">資料狀態</th>
+                                    <th className="p-3 font-semibold text-left pl-6">月份</th>
+                                    <th className="p-3 font-semibold text-right">活躍流量 (A)</th>
+                                    <th className="p-3 font-semibold text-right">名單/預約數 (B)</th>
+                                    <th className="p-3 font-semibold text-right">總營收 (C)</th>
+                                    <th className="p-3 font-semibold text-right text-indigo-600 bg-indigo-50/50">流量營收比 (C/A)</th>
+                                    <th className="p-3 font-semibold text-right text-teal-600">流量留單率 (B/A)</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <TableRow title="獲利脈 (總營收)" val={pulseMetrics.profit.value} unit="$" status={pulseMetrics.profit.hasData ? 'good' : 'none'} msg="資料齊全" />
-                                <TableRow title="金主脈 (客單價)" val={pulseMetrics.vip.value} unit="$" status={pulseMetrics.vip.hasData ? 'good' : 'none'} msg="資料齊全" />
-                                <TableRow title="老主脈 (>1次購買率)" val={pulseMetrics.retention.value} unit="%" status={pulseMetrics.retention.hasData ? 'good' : 'none'} msg="資料齊全" />
-                                <TableRow title="流量脈 (活躍使用者)" val={pulseMetrics.traffic.value} unit="人" status={pulseMetrics.traffic.hasData ? 'good' : 'none'} msg={pulseMetrics.traffic.hasData ? "資料齊全" : "需補充 GA 流量數據"} />
-                                <TableRow title="轉換脈 (預約/留單轉換率)" val={pulseMetrics.conversion.value} unit="%" status={pulseMetrics.conversion.hasData ? 'good' : 'none'} msg={pulseMetrics.conversion.hasData ? "資料齊全" : "需補充 GA 流量數據"} />
-                                <TableRow title="擁主脈 (NPS)" val={null} unit="" status="none" msg="需補充問卷調查數據" />
+                                {mergedMonthlyData.map((d, i) => {
+                                    const totalConv = (d.appointments || 0) + (d.leads || 0);
+                                    const convRate = d.active_users > 0 ? ((totalConv / d.active_users) * 100).toFixed(2) : '0.00';
+                                    return (
+                                        <tr key={i} className="border-b border-gray-50 hover:bg-slate-50 transition-colors">
+                                            <td className="p-3 text-left pl-6 font-mono text-slate-600">{d.year_month}</td>
+                                            <td className="p-3 text-right">{d.active_users.toLocaleString()} 人</td>
+                                            <td className="p-3 text-right">{totalConv.toLocaleString()} 組</td>
+                                            <td className="p-3 text-right">${d.total_revenue.toLocaleString()}</td>
+                                            <td className="p-3 text-right font-bold text-indigo-600 bg-indigo-50/30">
+                                                ${(d.rpv || 0).toFixed(0)} <span className="text-xs text-slate-400 font-normal">/ 人</span>
+                                            </td>
+                                            <td className="p-3 text-right font-bold text-teal-600">{convRate}%</td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -446,7 +467,7 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold text-slate-800">🔬 深度病理分析</h2>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* ★★★ V12.0 重大升級：客製化漏斗區塊 (解決數量級問題並加入流失率) ★★★ */}
+                {/* ★★★ V12.0 重大升級：客製化高階商業漏斗 ★★★ */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[400px]">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-lg font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">流量變現漏斗 (Funnel)</h3>
@@ -456,9 +477,12 @@ export default function Dashboard() {
                         </div>
                     </div>
                     
-                    <div className="flex-1 flex items-center justify-center">
+                    <div className="flex-1 flex items-center justify-center overflow-x-auto">
                         <CustomFunnel data={funnelMode === 'wedding' ? funnelDataWedding : funnelDataFestival} />
                     </div>
+                    <p className="text-xs text-slate-500 mt-4 text-center border-t border-slate-100 pt-3">
+                        診斷：檢視漏水率最高的階層，對症下藥優化轉換率。
+                    </p>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -564,7 +588,7 @@ export default function Dashboard() {
                             <ul className="space-y-4">
                                 <SpecItem title="O2O 婚禮漏斗" logic="活躍流量 ➡️ 門市預約數 ➡️ 到店成交數 ➡️ 忠誠回購數" desc="分析從線上瀏覽到線下預約試吃的轉換損耗。" />
                                 <SpecItem title="EC 節慶漏斗" logic="活躍流量 ➡️ 節慶名單 ➡️ 電商成交數 ➡️ 節慶回購數" desc="分析直接在網路上獲取名單並轉換下單的效率。" />
-                                <SpecItem title="漏水率診斷 (Drop-off Rate)" logic="1 - (本層數量 / 上一層數量)" desc="在漏斗圖中可視化，精確找出客戶流失的斷點。" />
+                                <SpecItem title="單位流量產值 (RPV)" logic="總營收 / 活躍流量" desc="反映每一個進站的顧客，平均能為品牌創造多少真實營收。" />
                             </ul>
                         </div>
                     </div>
@@ -590,54 +614,67 @@ export default function Dashboard() {
   );
 }
 
-// --- Sub-Components ---
+// --- Sub-Components (Fully Expanded for Readability) ---
 
-// ★★★ V12.0 新增：客製化自適應漏斗元件 ★★★
+// ★★★ V12.0 新增：客製化高階商業漏斗 (解決數量級與轉換率痛點) ★★★
 function CustomFunnel({ data }: { data: any[] }) {
     if (!data || data.length === 0) return <EmptyState message="無此模式資料" />;
     
-    // 以第一層作為分母基準
+    // 以第一層 (總流量) 作為分母基準
     const topValue = data[0].value;
 
     return (
         <div className="w-full flex flex-col items-center justify-center space-y-1 py-4">
             {data.map((step: any, index: number) => {
+                // 計算與上一層的差異
                 const prevValue = index > 0 ? data[index - 1].value : null;
                 const stepConv = prevValue ? ((step.value / prevValue) * 100).toFixed(1) : '100.0';
+                
+                // 計算與最上層的差異
                 const totalConv = topValue ? ((step.value / topValue) * 100).toFixed(1) : '100.0';
                 
-                // 為了避免數量級差異過大導致圖形不見，設定一個最低視覺寬度 (35%)
+                // 視覺寬度計算：為了避免數量級差異過大導致圖形小到看不見，設定最低寬度為 30%
                 const trueRatio = step.value / topValue;
-                const visualWidth = Math.max(35, trueRatio * 100); 
+                const visualWidth = Math.max(30, trueRatio * 100); 
 
                 return (
                     <div key={index} className="w-full flex flex-col items-center">
                         
-                        {/* 階層之間的箭頭與轉換率提示 */}
+                        {/* 階層之間的箭頭與漏水率提示 (從第二層開始顯示) */}
                         {index > 0 && (
                             <div className="flex flex-col items-center justify-center my-1 z-10">
                                 <div className="bg-white border border-slate-200 text-slate-500 text-[10px] sm:text-xs px-3 py-1 rounded-full shadow-sm flex items-center gap-2">
-                                    <span>轉換率 <strong className="text-green-600">{stepConv}%</strong></span>
+                                    <span>轉化 <strong className="text-green-600">{stepConv}%</strong></span>
                                     <span className="text-slate-300">|</span>
-                                    <span>流失率 <strong className="text-red-400">-{ (100 - Number(stepConv)).toFixed(1) }%</strong></span>
+                                    <span>流失 <strong className="text-red-400">-{ (100 - Number(stepConv)).toFixed(1) }%</strong></span>
                                 </div>
                                 <div className="h-4 w-px bg-slate-300"></div>
                                 <div className="w-2 h-2 border-b-2 border-r-2 border-slate-300 transform rotate-45 -mt-1 mb-1"></div>
                             </div>
                         )}
                         
-                        {/* 漏斗的色塊 */}
+                        {/* 漏斗的實體色塊 */}
                         <div 
                             className="flex justify-between items-center px-4 py-3 rounded-lg shadow-md text-white transition-all duration-500 hover:brightness-110"
-                            style={{ width: `${visualWidth}%`, minWidth: '280px', backgroundColor: step.fill }}
+                            style={{ 
+                                width: `${visualWidth}%`, 
+                                minWidth: '260px', 
+                                backgroundColor: step.fill 
+                            }}
                         >
                             <span className="font-bold text-sm sm:text-base mr-2 flex items-center gap-2">
-                                <span className="bg-white/20 px-2 py-0.5 rounded text-xs">{index + 1}</span>
+                                <span className="bg-white/30 px-2 py-0.5 rounded-full text-xs">{index + 1}</span>
                                 {step.name}
                             </span>
                             <div className="text-right">
-                                <div className="text-xl sm:text-2xl font-black tracking-tight">{step.value.toLocaleString()}</div>
-                                {index > 0 && <div className="text-[10px] sm:text-xs opacity-90 font-medium">總轉換率: {totalConv}%</div>}
+                                <div className="text-xl sm:text-2xl font-black tracking-tight">
+                                    {step.value.toLocaleString()}
+                                </div>
+                                {index > 0 && (
+                                    <div className="text-[10px] sm:text-xs opacity-90 font-medium">
+                                        總轉換率: {totalConv}%
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -725,7 +762,13 @@ function AiDiagnosisPanel({ clientName, revenue, rfmSegments, nesData, topProduc
                 nesSummary: nesData.map((s:any) => `${s.name}: ${s.count}人`), 
                 topProducts: top3 
             };
-            const res = await fetch('/api/diagnose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(aiPayload) });
+            
+            const res = await fetch('/api/diagnose', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(aiPayload) 
+            });
+            
             if (res.ok) { 
                 const data = await res.json(); 
                 setD(data.diagnosis); 
@@ -795,8 +838,12 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
         setNewTaskContent(''); 
     };
     
-    const moveTask = (id: number, status: any) => { setTasks(tasks.map(t => t.id === id ? { ...t, status } : t)); };
-    const deleteTask = (id: number) => { setTasks(tasks.filter(t => t.id !== id)); };
+    const moveTask = (id: number, status: any) => { 
+        setTasks(tasks.map(t => t.id === id ? { ...t, status } : t)); 
+    };
+    const deleteTask = (id: number) => { 
+        setTasks(tasks.filter(t => t.id !== id)); 
+    };
     
     const poolTasks = tasks.filter(t => t.status === 'pool');
     const approvedTasks = tasks.filter(t => t.status === 'approved');
@@ -807,13 +854,17 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-slate-800">💊 {clientName} - 顧問藥方管理</h2>
             </div>
+            
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex gap-2">
                 <select value={newPulse} onChange={(e) => setNewPulse(e.target.value)} className="border rounded px-2 text-sm bg-slate-50">
                     {Object.keys(PULSE_CONFIG).map(k => <option key={k} value={k}>{PULSE_CONFIG[k].label}</option>)}
                 </select>
                 <input type="text" value={newTaskContent} onChange={(e) => setNewTaskContent(e.target.value)} placeholder="輸入新的改善對策..." className="flex-1 border rounded px-3 text-sm"/>
-                <button onClick={addTask} className="bg-blue-600 text-white px-4 rounded hover:bg-blue-700 font-bold flex items-center gap-1"><Plus size={16}/> 新增</button>
+                <button onClick={addTask} className="bg-blue-600 text-white px-4 rounded hover:bg-blue-700 font-bold flex items-center gap-1">
+                    <Plus size={16}/> 新增
+                </button>
             </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 min-h-[500px]">
                     <h3 className="font-bold text-slate-600 mb-4 flex items-center gap-2"><Bot size={18}/> 建議池 (System & Pool)</h3>
@@ -832,6 +883,7 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
                         ))}
                     </div>
                 </div>
+                
                 <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 min-h-[500px]">
                     <h3 className="font-bold text-purple-700 mb-4 flex items-center gap-2"><CheckCircle size={18}/> 已核准 (Approved)</h3>
                     <div className="space-y-2">
@@ -846,6 +898,7 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
                         ))}
                     </div>
                 </div>
+                
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 min-h-[500px]">
                     <h3 className="font-bold text-blue-700 mb-4 flex items-center gap-2"><Flame size={18}/> 執行中 (Active)</h3>
                     <div className="space-y-2">
@@ -875,7 +928,11 @@ function DataUploader({ supabase, onSuccess }: any) {
     
     const handleFile = (e: any) => { 
         setErrorDetails(""); 
-        if (!clientName.trim()) { alert("請先輸入客戶名稱！"); e.target.value = ''; return; }
+        if (!clientName.trim()) { 
+            alert("請先輸入客戶名稱！"); 
+            e.target.value = ''; 
+            return; 
+        }
         const file = e.target.files[0]; 
         if (!file) return; 
         
@@ -973,16 +1030,37 @@ function DataUploader({ supabase, onSuccess }: any) {
 
     return (
         <div className="space-y-6">
-            <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="請輸入客戶名稱 (例如：CUPETIT)" className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"/>
+            <input 
+                type="text" 
+                value={clientName} 
+                onChange={(e) => setClientName(e.target.value)} 
+                placeholder="請輸入客戶名稱 (例如：CUPETIT)" 
+                className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+            />
             
             <div className="flex gap-4">
-                <button onClick={() => {setUploadType('tx'); setErrorDetails("");}} className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'tx' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>1. 交易訂單資料 (CSV)</button>
-                <button onClick={() => {setUploadType('ga'); setErrorDetails("");}} className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'ga' ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>2. GA 流量資料 (CSV)</button>
+                <button 
+                    onClick={() => {setUploadType('tx'); setErrorDetails("");}} 
+                    className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'tx' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                >
+                    1. 交易訂單資料 (CSV)
+                </button>
+                <button 
+                    onClick={() => {setUploadType('ga'); setErrorDetails("");}} 
+                    className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'ga' ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                >
+                    2. GA 流量資料 (CSV)
+                </button>
             </div>
 
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-600">📂 檔案編碼 (若出現亂碼請切換)</span>
-                <select value={encoding} onChange={(e) => setEncoding(e.target.value)} className="border border-slate-300 rounded px-3 py-1 text-sm bg-white outline-none" disabled={uploading}>
+                <select 
+                    value={encoding} 
+                    onChange={(e) => setEncoding(e.target.value)} 
+                    className="border border-slate-300 rounded px-3 py-1 text-sm bg-white outline-none" 
+                    disabled={uploading}
+                >
                     <option value="UTF-8">UTF-8 (系統預設)</option>
                     <option value="Big5">Big5 (台灣 Excel 常見)</option>
                 </select>
@@ -992,7 +1070,9 @@ function DataUploader({ supabase, onSuccess }: any) {
                 <input type="file" accept=".csv" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" disabled={uploading} />
                 <div className="flex flex-col items-center gap-3">
                     {uploading ? <Loader2 className="animate-spin w-10 h-10 text-slate-400"/> : <FileUp size={48} className={uploadType === 'tx' ? 'text-blue-500' : 'text-green-500'}/>}
-                    <span className="font-bold text-slate-700 text-lg">{uploading ? msg : `點擊上傳 ${uploadType === 'tx' ? '交易' : 'GA'} CSV`}</span>
+                    <span className="font-bold text-slate-700 text-lg">
+                        {uploading ? msg : `點擊上傳 ${uploadType === 'tx' ? '交易' : 'GA'} CSV`}
+                    </span>
                 </div>
             </div>
 
@@ -1001,7 +1081,11 @@ function DataUploader({ supabase, onSuccess }: any) {
                     <div className="flex items-center gap-2 text-red-700 font-bold mb-3">
                         <AlertTriangle size={18} /> 哎呀，上傳失敗了！(可複製給工程師)
                     </div>
-                    <textarea readOnly className="w-full h-48 p-3 text-sm text-red-600 bg-white border border-red-200 rounded-lg outline-none font-mono" value={errorDetails} />
+                    <textarea 
+                        readOnly 
+                        className="w-full h-48 p-3 text-sm text-red-600 bg-white border border-red-200 rounded-lg outline-none font-mono" 
+                        value={errorDetails} 
+                    />
                 </div>
             )}
         </div>
