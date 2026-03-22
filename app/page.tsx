@@ -60,9 +60,6 @@ export default function Dashboard() {
   const [rfmSegments, setRfmSegments] = useState<any[]>([]);
   const [nesData, setNesData] = useState<any[]>([]);
 
-  // 智慧洞察文字
-  const [autoInsightText, setAutoInsightText] = useState("");
-
   const [pulseMetrics, setPulseMetrics] = useState({
       traffic: { value: null as number | null, hasData: false, unit: '人' },      
       conversion: { value: null as number | null, hasData: false, unit: '%' },    
@@ -145,7 +142,7 @@ export default function Dashboard() {
 
   }, [gaRawData, txChanData, crossMode]);
 
-  // ★ 智慧洞察文字
+  // ★ 智慧洞察文字 (使用 useMemo 自動計算)
   const autoInsightText = useMemo(() => {
       const data = crossAnalysisData;
       if(data.length < 2) return "資料不足，無法產生交叉分析洞察。";
@@ -405,7 +402,6 @@ export default function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* ★★★ V14.2：解決數量級問題，加入第三根獨立 Y 軸 ★★★ */}
                     <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-slate-800">雙軌營收與流量趨勢 (Cross-Analysis)</h3>
@@ -421,13 +417,9 @@ export default function Dashboard() {
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
                                     
-                                    {/* 左 Y 軸：營收 (藍色長條) */}
                                     <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/10000).toFixed(0)}w`} />
                                     
-                                    {/* 右 Y 軸 1：流量 (紫色實線，數量級大) */}
                                     <YAxis yAxisId="right_traffic" orientation="right" tickFormatter={(val) => `${(val/1000).toFixed(1)}k`} />
-                                    
-                                    {/* 右 Y 軸 2：預約名單 (綠色虛線，數量級小) -> 隱藏座標軸，讓圖表自動將曲線撐開 */}
                                     <YAxis yAxisId="right_conv" orientation="right" hide={true} domain={['auto', 'auto']} />
                                     
                                     <Tooltip formatter={(val: any, name: any) => (name||'').includes('營收') ? `$${Number(val).toLocaleString()}` : `${Number(val).toLocaleString()} 人/組`} />
@@ -435,8 +427,6 @@ export default function Dashboard() {
                                     
                                     <Bar yAxisId="left" dataKey="revenue" fill="#3b82f6" name="產生營收 (左軸)" radius={[4,4,0,0]} barSize={30} />
                                     <Line yAxisId="right_traffic" type="monotone" dataKey="active_users" stroke="#8b5cf6" strokeWidth={3} name="活躍流量 (右軸)" dot={{ r: 4 }} />
-                                    
-                                    {/* 綁定獨立的 right_conv 軸，徹底解決變成平線的問題 */}
                                     <Line yAxisId="right_conv" type="monotone" dataKey="conversions" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" name={crossMode==='ec'?'名單數 (趨勢比例)':'預約數 (趨勢比例)'} dot={{ r: 4 }} />
                                 </ComposedChart>
                             </ResponsiveContainer>
@@ -614,6 +604,7 @@ export default function Dashboard() {
 
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} rfmSegments={rfmSegments} nesData={nesData} />}
 
+        {/* ★★★ V14.0 重大升級：全數據大辭典 ★★★ */}
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
