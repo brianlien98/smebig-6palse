@@ -101,7 +101,7 @@ export default function Dashboard() {
       
       gaRawData.forEach(g => {
           const isWedding = (g.category || '').includes('婚禮') || (g.category || '').includes('彌月');
-          const isFestival = !isWedding; // 其他視為節慶/EC
+          const isFestival = !isWedding; 
           
           if (!gaMonthMap[g.year_month]) gaMonthMap[g.year_month] = { active_users: 0, conversions: 0 };
           
@@ -160,7 +160,7 @@ export default function Dashboard() {
               const dropRatio = 1 - (d.conversions / d.active_users);
               if(dropRatio > maxDropVal) {
                   maxDropVal = dropRatio;
-                  maxDropDrop = d;
+                  maxDrop = d; // ★ 修復了 maxDropDrop 的 Typo 錯誤
               }
           }
       });
@@ -169,9 +169,9 @@ export default function Dashboard() {
       const convLabel = crossMode === 'ec' ? '名單' : '預約';
 
       return `【${modeName} 智慧數據洞察】
-🎯 流量巔峰落在 ${maxTraffic.year_month} (${maxTraffic.active_users.toLocaleString()}人)；${convLabel}轉換最高落在 ${maxConv.year_month} (${maxConv.conversions}組)。
-💰 營收高點為 ${maxRev.year_month} ($${(maxRev.revenue/10000).toFixed(0)}萬)。
-⚠️ 需注意「${maxDrop.year_month}」，該月有 ${(maxDrop.active_users).toLocaleString()} 人造訪，卻僅帶來 ${maxDrop.conversions} 筆${convLabel} (單位流量產值僅 $${maxDrop.rpv?.toFixed(0) || 0})，形成巨大反差，建議檢視該月行銷受眾精準度。`;
+🎯 流量巔峰落在 ${maxTraffic?.year_month || '未知'} (${(maxTraffic?.active_users || 0).toLocaleString()}人)；${convLabel}轉換最高落在 ${maxConv?.year_month || '未知'} (${maxConv?.conversions || 0}組)。
+💰 營收高點為 ${maxRev?.year_month || '未知'} ($${((maxRev?.revenue || 0) / 10000).toFixed(0)}萬)。
+⚠️ 需注意「${maxDrop?.year_month || '未知'}」，該月有 ${(maxDrop?.active_users || 0).toLocaleString()} 人造訪，卻僅帶來 ${maxDrop?.conversions || 0} 筆${convLabel} (單位流量產值僅 $${maxDrop?.rpv?.toFixed(0) || 0})，形成巨大反差，建議檢視該月行銷受眾精準度。`;
 
   }, [crossAnalysisData, crossMode]);
 
@@ -215,7 +215,7 @@ export default function Dashboard() {
             }
         });
 
-        // TX 真實獨立客數拆分 (直接從 View 撈取，不依賴粗略比例)
+        // TX 真實獨立客數拆分 (直接從 View 撈取)
         chanFunnel.forEach(r => {
             if(r.channel_group === 'EC') {
                 f_sales += Number(r.total_customers) || 0;
@@ -270,7 +270,7 @@ export default function Dashboard() {
         });
         setGaCategoryData(Object.entries(catMap).map(([name, value]) => ({ name, value })).sort((a:any, b:any) => b.value - a.value));
 
-        // 4. 其他深度圖表 (Product, Channel, RFM, Cohort)
+        // 4. 其他深度圖表
         const { data: prodRaw } = await supabase.from('product_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false }).limit(10);
         setProductData((prodRaw || []).map(p => ({ name: p.product_name, value: p.total_revenue })));
 
@@ -404,7 +404,6 @@ export default function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* ★★★ V14.0 雙軌交叉分析圖表 ★★★ */}
                     <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-slate-800">雙軌營收與流量趨勢 (Cross-Analysis)</h3>
@@ -441,7 +440,6 @@ export default function Dashboard() {
                     <AiDiagnosisPanel clientName={selectedClient} revenue={pulseMetrics.profit.value} rfmSegments={rfmSegments} nesData={nesData} topProducts={productData} />
                 </div>
 
-                {/* ★★★ V14.0 雙軌 RPV 對照表 ★★★ */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-slate-50 flex justify-between items-center">
                         <h3 className="text-lg font-bold text-slate-800">
@@ -528,7 +526,10 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3">NES 顧客生命週期</h3><span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">N=新, E=活, S=睡</span></div>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3">NES 顧客生命週期</h3>
+                        <span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">N=新, E=活, S=睡</span>
+                    </div>
                     <div className="h-[250px]">
                         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                             <BarChart data={nesData} layout="vertical" margin={{ left: 40 }}>
@@ -544,7 +545,10 @@ export default function Dashboard() {
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-slate-800 border-l-4 border-yellow-500 pl-3">RFM 分群營收貢獻</h3><span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">誰是您的金雞母？</span></div>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800 border-l-4 border-yellow-500 pl-3">RFM 分群營收貢獻</h3>
+                        <span className="text-xs text-gray-500 bg-slate-100 px-2 py-1 rounded">誰是您的金雞母？</span>
+                    </div>
                     <div className="h-[250px]">
                         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                             <PieChart>
@@ -599,11 +603,10 @@ export default function Dashboard() {
 
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} rfmSegments={rfmSegments} nesData={nesData} />}
 
-        {/* ★★★ V14.0 重大升級：全數據大辭典 ★★★ */}
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據大辭典與計算公式 (V14.0 完整版)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據大辭典與計算公式 (V14.1 完整版)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-indigo-700 border-b border-indigo-100 pb-2">【基礎六脈指標】</h3>
