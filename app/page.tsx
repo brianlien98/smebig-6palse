@@ -160,25 +160,25 @@ export default function Dashboard() {
 
       const arr = crossAnalysisData;
       
-      // 輔助函數：計算歷史排位 PR 值 (0-100)
+      // 輔助函數：計算歷史排位 PR 值 (0-100) -> 已修復 TypeScript any 錯誤
       const getPr = (val: number, key: string) => {
-          const sorted = arr.map(a => a[key]).sort((a,b) => a - b);
+          const sorted = arr.map(a => (a as any)[key]).sort((a,b) => a - b);
           const rank = sorted.findIndex(v => v >= val) + 1;
           return (rank / sorted.length) * 100;
       };
       
-      // 輔助函數：計算成長動能 (相較前 6 個月平均，最高 150)
+      // 輔助函數：計算成長動能 (相較前 6 個月平均，最高 150) -> 已修復 TypeScript any 錯誤
       const getMom = (val: number, key: string, idx: number) => {
           if (idx === 0) return 100; // 第一個月基準為 100
-          const past = arr.slice(Math.max(0, idx - 6), idx).map(a => a[key]);
+          const past = arr.slice(Math.max(0, idx - 6), idx).map(a => (a as any)[key]);
           const avg = past.reduce((a,b) => a + b, 0) / past.length;
           if (avg === 0) return val > 0 ? 150 : 100;
           return Math.min(150, (val / avg) * 100);
       };
 
-      // 輔助函數：計算目標達成 (相較歷史最高點)
+      // 輔助函數：計算目標達成 (相較歷史最高點) -> 已修復 TypeScript any 錯誤
       const getTar = (val: number, key: string) => {
-          const max = Math.max(...arr.map(a => a[key]));
+          const max = Math.max(...arr.map(a => (a as any)[key]));
           if (max === 0) return 0;
           return (val / max) * 100;
       };
@@ -467,7 +467,6 @@ export default function Dashboard() {
                                 <ComposedChart data={crossAnalysisData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="year_month" />
-                                    
                                     <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/10000).toFixed(0)}w`} />
                                     <YAxis yAxisId="right_traffic" orientation="right" tickFormatter={(val) => `${(val/1000).toFixed(1)}k`} />
                                     <YAxis yAxisId="right_conv" orientation="right" hide={true} domain={['auto', 'auto']} />
@@ -919,7 +918,7 @@ function AiDiagnosisPanel({ clientName }: any) {
     
     // 預設 6 組極具商業深度的顧問文案
     const MOCK_DIAGNOSIS = [
-        "【成長動能強勁】\n本月流量與轉換雙雙達標，Patron Score 成長動能突破 110 分。建議本月可額外加碼 15% 預算於表現最佳的導流渠道，趁勢放大獲利脈。",
+        "【成長動能強勁】\n本月流量與轉換雙雙達標，Patron Score 成長動能突破 110 分。建議本月可額外加碼 15% 預算於表現最佳的導流渠道，趁勢放大品牌脈。",
         "【客單價提升警訊】\n雖然網站活躍流量大，但「金主脈(AOV)」較歷史平均下滑 12%。建議針對購物車結帳頁面增加「滿額贈」或「加購優惠」模組以拉抬客單價。",
         "【沉睡客喚醒時機】\n系統的 NES 模型偵測到高達 30% 的歷史 VVIP 已進入「S: 睡眠期」(超過200天未購買)。建議立即啟動客服專人致電或高單價回歸禮發送計畫。",
         "【轉換漏水嚴重】\n本期 O2O 漏斗流失率達 85%！大量的流量卡在「門市預約」階段。建議檢視落地頁的預約表單欄位是否過於繁瑣，或提供更明確的預約誘因。",
@@ -971,7 +970,7 @@ function AiDiagnosisPanel({ clientName }: any) {
 function ConsultantPrescriptionPage({ clientName, rfmSegments }: any) {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [newTaskContent, setNewTaskContent] = useState('');
-    const [newPulse, setNewPulse] = useState('Profit'); // 預設改為 Profit
+    const [newPulse, setNewPulse] = useState('Profit'); 
     
     useEffect(() => {
         if (!rfmSegments || rfmSegments.length === 0) return;
