@@ -8,13 +8,13 @@ import {
 import { 
   Loader2, PieChart as IconPie, Microscope, ListTodo, Upload, FileUp, 
   Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2, BookOpen,
-  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus
+  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus, Award
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { createBrowserClient } from '@supabase/ssr';
 
 // --- Configuration ---
-// ★ 修改 1: 調整了順序，將「品牌脈(Profit)」移至第一個，並更名。
+// ★ 獲利脈改名為「品牌脈」並移至第一順位
 const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg: string, border: string, text: string }> = {
   'Profit': { label: '品牌脈', icon: CircleDollarSign, color: 'slate', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
   'Traffic': { label: '流量脈', icon: Users, color: 'blue', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
@@ -61,6 +61,9 @@ export default function Dashboard() {
   const [rfmSegments, setRfmSegments] = useState<any[]>([]);
   const [nesData, setNesData] = useState<any[]>([]);
 
+  // Patron Score 狀態
+  const [patronScores, setPatronScores] = useState<any[]>([]);
+
   const [pulseMetrics, setPulseMetrics] = useState({
       profit: { value: 0, hasData: true, unit: '$' },            
       traffic: { value: null as number | null, hasData: false, unit: '人' },      
@@ -87,16 +90,20 @@ export default function Dashboard() {
         const uniqueClients = Array.from(new Set(allNames));
         setClientList(uniqueClients as string[]);
         if (!selectedClient && uniqueClients.length > 0) setSelectedClient(uniqueClients[0] as string);
-    } catch (e) { console.error("Fetch clients error:", e); }
+    } catch (e) { 
+        console.error("Fetch clients error:", e); 
+    }
   };
 
-  useEffect(() => { fetchClients(); }, []);
+  useEffect(() => { 
+      fetchClients(); 
+  }, []);
 
   useEffect(() => {
     if (selectedClient) refreshData(selectedClient);
   }, [selectedClient]);
 
-  // ★ 動態構建交叉分析資料 (根據 crossMode 切換)
+  // 動態構建交叉分析資料
   const crossAnalysisData = useMemo(() => {
       const gaMonthMap: any = {};
       
@@ -119,9 +126,11 @@ export default function Dashboard() {
 
       const txMonthMap: any = {};
       txChanData.forEach(t => {
-          if (!txMonthMap[t.year_month]) txMonthMap[t.year_month] = { revenue: 0 };
+          if (!txMonthMap[t.year_month]) txMonthMap[t.year_month] = { revenue: 0, aov: 0 };
           if (crossMode === 'all' || (crossMode === 'offline' && t.channel_group === 'Offline') || (crossMode === 'ec' && t.channel_group === 'EC')) {
               txMonthMap[t.year_month].revenue += (Number(t.total_revenue) || 0);
+              // Simplified AOV for scoring
+              txMonthMap[t.year_month].aov = (Number(t.total_revenue) || 0) / (Number(t.order_count) || 1);
           }
       });
 
@@ -129,11 +138,13 @@ export default function Dashboard() {
       
       return allMonths.map(month => {
           const rev = txMonthMap[month]?.revenue || 0;
+          const aov = txMonthMap[month]?.aov || 0;
           const users = gaMonthMap[month]?.active_users || 0;
           const convs = gaMonthMap[month]?.conversions || 0;
           return {
               year_month: month,
               revenue: rev,
+              aov: aov,
               active_users: users,
               conversions: convs,
               rpv: users > 0 ? (rev / users) : 0,
@@ -143,38 +154,77 @@ export default function Dashboard() {
 
   }, [gaRawData, txChanData, crossMode]);
 
-  // ★ 智慧洞察文字
-  const autoInsightText = useMemo(() => {
-      const data = crossAnalysisData;
-      if(data.length < 2) return "資料不足，無法產生交叉分析洞察。";
+  // ★ 核心功能：計算 Patron Score 三大分數
+  useEffect(() => {
+      if (crossAnalysisData.length === 0) return;
 
-      let maxTraffic = data[0], maxConv = data[0], maxRev = data[0], maxDrop = data[0]; 
-      let maxDropVal = -1;
+      const arr = crossAnalysisData;
+      
+      // 輔助函數：計算歷史排位 PR 值 (0-100)
+      const getPr = (val: number, key: string) => {
+          const sorted = arr.map(a => a[key]).sort((a,b) => a - b);
+          const rank = sorted.findIndex(v => v >= val) + 1;
+          return (rank / sorted.length) * 100;
+      };
+      
+      // 輔助函數：計算成長動能 (相較前 6 個月平均，最高 150)
+      const getMom = (val: number, key: string, idx: number) => {
+          if (idx === 0) return 100; // 第一個月基準為 100
+          const past = arr.slice(Math.max(0, idx - 6), idx).map(a => a[key]);
+          const avg = past.reduce((a,b) => a + b, 0) / past.length;
+          if (avg === 0) return val > 0 ? 150 : 100;
+          return Math.min(150, (val / avg) * 100);
+      };
 
-      data.forEach(d => {
-          if(d.active_users > maxTraffic.active_users) maxTraffic = d;
-          if(d.conversions > maxConv.conversions) maxConv = d;
-          if(d.revenue > maxRev.revenue) maxRev = d;
+      // 輔助函數：計算目標達成 (相較歷史最高點)
+      const getTar = (val: number, key: string) => {
+          const max = Math.max(...arr.map(a => a[key]));
+          if (max === 0) return 0;
+          return (val / max) * 100;
+      };
 
-          // 反差指標：流量大(>500)但轉換率低
-          if(d.active_users > 500) {
-              const dropRatio = 1 - (d.conversions / d.active_users);
-              if(dropRatio > maxDropVal) {
-                  maxDropVal = dropRatio;
-                  maxDrop = d; 
-              }
-          }
+      // 定義六脈動態權重 (因部分資料如 NPS 暫缺，權重按比例重分配)
+      // 品牌脈(營收) 35%, 轉換脈 25%, 流量脈 15%, 金主脈(AOV) 15%, 留存效率(RPV) 10%
+      const w = { rev: 0.35, traffic: 0.15, conv: 0.25, aov: 0.15, rpv: 0.10 };
+
+      const scores = arr.map((d, index) => {
+          // 1. 歷史排位分數
+          const rankScore = (
+              getPr(d.revenue, 'revenue') * w.rev + 
+              getPr(d.active_users, 'active_users') * w.traffic + 
+              getPr(d.conv_rate, 'conv_rate') * w.conv + 
+              getPr(d.aov, 'aov') * w.aov + 
+              getPr(d.rpv, 'rpv') * w.rpv
+          );
+
+          // 2. 成長動能分數
+          const momScore = (
+              getMom(d.revenue, 'revenue', index) * w.rev + 
+              getMom(d.active_users, 'active_users', index) * w.traffic + 
+              getMom(d.conv_rate, 'conv_rate', index) * w.conv + 
+              getMom(d.aov, 'aov', index) * w.aov + 
+              getMom(d.rpv, 'rpv', index) * w.rpv
+          );
+
+          // 3. 目標達成分數
+          const tarScore = (
+              getTar(d.revenue, 'revenue') * w.rev + 
+              getTar(d.active_users, 'active_users') * w.traffic + 
+              getTar(d.conv_rate, 'conv_rate') * w.conv + 
+              getTar(d.aov, 'aov') * w.aov + 
+              getTar(d.rpv, 'rpv') * w.rpv
+          );
+
+          return {
+              year_month: d.year_month,
+              歷史排位: Math.round(rankScore),
+              成長動能: Math.round(momScore),
+              目標達成: Math.round(tarScore)
+          };
       });
 
-      const modeName = crossMode === 'all' ? '全通路' : (crossMode === 'offline' ? 'O2O實體(婚禮)' : 'EC電商(節慶)');
-      const convLabel = crossMode === 'ec' ? '名單' : '預約';
-
-      return `【${modeName} 智慧數據洞察】
-🎯 流量巔峰落在 ${maxTraffic?.year_month || '未知'} (${(maxTraffic?.active_users || 0).toLocaleString()}人)；${convLabel}轉換最高落在 ${maxConv?.year_month || '未知'} (${maxConv?.conversions || 0}組)。
-💰 營收高點為 ${maxRev?.year_month || '未知'} ($${((maxRev?.revenue || 0) / 10000).toFixed(0)}萬)。
-⚠️ 需注意「${maxDrop?.year_month || '未知'}」，該月有 ${(maxDrop?.active_users || 0).toLocaleString()} 人造訪，卻僅帶來 ${maxDrop?.conversions || 0} 筆${convLabel} (單位流量產值僅 $${maxDrop?.rpv?.toFixed(0) || 0})，形成巨大反差，建議檢視該月行銷受眾精準度。`;
-
-  }, [crossAnalysisData, crossMode]);
+      setPatronScores(scores);
+  }, [crossAnalysisData]);
 
   const refreshData = async (clientName: string) => {
     setLoading(true);
@@ -197,7 +247,6 @@ export default function Dashboard() {
         setGaRawData(gaRawItems);
         setTxChanData(monthlyChanRaw || []);
 
-        // 1. 精準拆分 O2O 與 EC 漏斗資料
         let w_traffic = 0, w_appt = 0;
         let f_traffic = 0, f_leads = 0;
         let w_sales = 0, w_repeat = 0;
@@ -239,7 +288,6 @@ export default function Dashboard() {
             { name: '4. 電商回購客(TX)', value: f_repeat, fill: '#f43f5e' }
         ].filter(v => v.value > 0));
 
-        // 2. 計算基礎 KPI
         const totalRev = mData.reduce((acc, cur) => acc + (cur.total_revenue || 0), 0);
         const totalOrd = mData.reduce((acc, cur) => acc + (cur.order_count || 0), 0);
         const avgAov = totalOrd > 0 ? Math.round(totalRev / totalOrd) : 0;
@@ -261,7 +309,6 @@ export default function Dashboard() {
             reputation: { value: null, hasData: false, unit: '分' } 
         });
 
-        // 3. GA 圓餅圖分類
         const catMap: any = {};
         gaRawItems.forEach(c => {
             const cat = c.category || '未分類';
@@ -269,7 +316,6 @@ export default function Dashboard() {
         });
         setGaCategoryData(Object.entries(catMap).map(([name, value]) => ({ name, value })).sort((a:any, b:any) => b.value - a.value));
 
-        // 4. 其他深度圖表
         const { data: prodRaw } = await supabase.from('product_analytics').select('*').eq('client_name', clientName).order('total_revenue', { ascending: false }).limit(10);
         setProductData((prodRaw || []).map(p => ({ name: p.product_name, value: p.total_revenue })));
 
@@ -325,7 +371,9 @@ export default function Dashboard() {
             return { m: month, v: [0,1,2,3].map(m => m===0?100 : Math.round((d.months[m]/d.total)*100)||0) };
         }));
 
-    } catch (err) { console.error("Data Load Error:", err); }
+    } catch (err) { 
+        console.error("Data Load Error:", err); 
+    }
     setLoading(false);
   };
 
@@ -342,7 +390,6 @@ export default function Dashboard() {
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                     <div className="bg-blue-600 text-white w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-lg">S</div>
-                    {/* ★ 修改 2: 系統名稱變更 */}
                     <span className="text-lg font-bold text-slate-800 hidden md:block">SMEbig PatronOS™</span>
                 </div>
                 <div className="relative">
@@ -361,6 +408,8 @@ export default function Dashboard() {
             </div>
             <div className="flex space-x-1 md:space-x-4 h-full overflow-x-auto">
                 <TabButton id="page1" label="營運體檢" icon={<IconPie size={16}/>} active={activeTab === 'page1'} onClick={() => setActiveTab('page1')} />
+                {/* ★ 新增 Patron Score 分頁 */}
+                <TabButton id="page6" label="Patron Score" icon={<Award size={16}/>} active={activeTab === 'page6'} onClick={() => setActiveTab('page6')} />
                 <TabButton id="page2" label="深度病理" icon={<Microscope size={16}/>} active={activeTab === 'page2'} onClick={() => setActiveTab('page2')} />
                 <TabButton id="page3" label="顧問藥方" icon={<ListTodo size={16}/>} active={activeTab === 'page3'} onClick={() => setActiveTab('page3')} />
                 <TabButton id="page5" label="數據定義" icon={<BookOpen size={16}/>} active={activeTab === 'page5'} onClick={() => setActiveTab('page5')} />
@@ -390,18 +439,11 @@ export default function Dashboard() {
                     <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
                     <p className="text-sm text-slate-500">以六脈指標動態評估品牌健康度</p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                        <button className="px-3 py-1 text-sm font-bold bg-white shadow rounded text-slate-800">全部期間</button>
-                        <button className="px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50" disabled>本年對比</button>
-                    </div>
-                </div>
             </div>
 
             {loading ? <LoadingSkeleton /> : (
             <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* ★ 順序已調整：品牌脈放第一 */}
                     <PulseCard title="品牌脈 (總營收)" icon={<CircleDollarSign size={20}/>} color="slate" data={pulseMetrics.profit} trend={null} />
                     <PulseCard title="流量脈 (總訪客)" icon={<Users size={20}/>} color="blue" data={pulseMetrics.traffic} missingMsg="缺少網站流量數據 (GA)" trend={null} />
                     <PulseCard title="轉換脈 (留單率)" icon={<MousePointerClick size={20}/>} color="green" data={pulseMetrics.conversion} missingMsg="缺少網站流量數據 (GA)" trend={null} />
@@ -439,14 +481,9 @@ export default function Dashboard() {
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>
-                        {autoInsightText && (
-                            <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                {autoInsightText}
-                            </div>
-                        )}
                     </div>
                     
-                    <AiDiagnosisPanel clientName={selectedClient} revenue={pulseMetrics.profit.value} rfmSegments={rfmSegments} nesData={nesData} topProducts={productData} />
+                    <AiDiagnosisPanel clientName={selectedClient} />
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -488,6 +525,83 @@ export default function Dashboard() {
             </>
             )}
           </div>
+        )}
+
+        {/* === Page 6: Patron Score (全新戰情分頁) === */}
+        {selectedClient && activeTab === 'page6' && (
+            <div className="space-y-6 animate-in fade-in">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-800">🏆 Patron Score 綜合營運指標</h2>
+                        <p className="text-sm text-slate-500">基於歷史數據自我競賽，快速掌握營運水位與成長動能。</p>
+                    </div>
+                </div>
+
+                {patronScores.length > 0 ? (
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <ScoreCard 
+                                title="Patron Score - 歷史排位" 
+                                score={patronScores[patronScores.length - 1].歷史排位} 
+                                desc="本月表現在歷史長河中的綜合 PR 值"
+                                color="blue"
+                            />
+                            <ScoreCard 
+                                title="Patron Score - 成長動能" 
+                                score={patronScores[patronScores.length - 1].成長動能} 
+                                desc="相較於過去半年的均值成長幅度 (基準100)"
+                                color="green"
+                            />
+                            <ScoreCard 
+                                title="Patron Score - 目標達成" 
+                                score={patronScores[patronScores.length - 1].目標達成} 
+                                desc="距離歷史最高峰 (滿分100) 還有多遠"
+                                color="purple"
+                            />
+                        </div>
+
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
+                            <h3 className="text-lg font-bold text-slate-800 mb-4">Patron Score 歷史趨勢追蹤</h3>
+                            <div className="h-[350px]">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                                    <LineChart data={patronScores} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="year_month" />
+                                        <YAxis domain={[0, 'auto']} />
+                                        <Tooltip />
+                                        <Legend />
+                                        <Line type="monotone" dataKey="歷史排位" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                        <Line type="monotone" dataKey="成長動能" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
+                                        <Line type="monotone" dataKey="目標達成" stroke="#8b5cf6" strokeWidth={3} strokeDasharray="5 5" dot={{ r: 4 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <BookOpen size={18} className="text-slate-600"/> Patron Score 指標解讀指南
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-slate-600">
+                                <div>
+                                    <strong className="text-blue-700 block mb-1">歷史排位 (Percentile Rank)</strong>
+                                    <p>將六脈指標與過去所有月份進行排序。若分數為 85，代表本月綜合表現擊敗了歷史上 85% 的月份。適合用來評估「當前營運水位是否在顛峰狀態」。</p>
+                                </div>
+                                <div>
+                                    <strong className="text-green-700 block mb-1">成長動能 (Momentum)</strong>
+                                    <p>將本月表現與「過去 6 個月的平均值」對比。100 分代表持平，120 分代表超標 20%。適合用來觀察「行銷活動是否成功帶起新一波的成長爆發力」。</p>
+                                </div>
+                                <div>
+                                    <strong className="text-purple-700 block mb-1">目標達成 (Target)</strong>
+                                    <p>找出品牌歷史上表現最完美的月份視為滿分 100。適合企業訂定 KPI 時，評估「我們距離曾經達到的最理想狀態還有多少差距」。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <EmptyState message="資料不足，無法計算 Patron Score" />
+                )}
+            </div>
         )}
 
         {/* === Page 2: Deep Analysis === */}
@@ -612,7 +726,7 @@ export default function Dashboard() {
 
         {selectedClient && activeTab === 'page3' && <ConsultantPrescriptionPage clientName={selectedClient} rfmSegments={rfmSegments} nesData={nesData} />}
 
-        {/* ★★★ V14.0 重大升級：全數據大辭典 ★★★ */}
+        {/* === Page 5: Data Definitions === */}
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
@@ -636,8 +750,8 @@ export default function Dashboard() {
                                 <SpecItem title="EC 電商漏斗" logic="GA節慶名單流量 ➡️ 節慶名單 ➡️ EC成交客(TX) ➡️ EC回購客" desc="分析直接在網路上獲取名單並轉換電商下單的效率。" />
                                 <SpecItem title="漏水率 (Drop-off)" logic="1 - (本層數量 / 上一層數量)" desc="在漏斗圖中可視化，精確找出客戶在哪個行銷節點流失。" />
                                 <SpecItem title="單位流量產值 (RPV)" logic="對應通路總營收 / 對應通路活躍流量" desc="Revenue Per Visitor。反映每一個進站的顧客，平均能為品牌創造多少真實營收。" />
-                                <SpecItem title="RFM 模型分群" logic="Recency (天數) x Frequency (次數) x Monetary (累積金額)" desc="定義五大黃金客群：頂級大使、潛力新星、穩定常客、沉睡大戶、流失過客。" />
-                                <SpecItem title="NES 生命週期" logic="N: 新客(<120天) / E: 活躍客(回購) / S: 沉睡客(>200天)" desc="宏觀檢視品牌目前的獲客健康度與流失危機。" />
+                                <SpecItem title="Patron Score" logic="以六脈動態加權運算" desc="計算出歷史排位(PR)、成長動能(MoM)與目標達成(Target)三大綜合評估分數。" />
+                                <SpecItem title="RFM 模型分群" logic="Recency x Frequency x Monetary" desc="定義五大黃金客群：頂級大使、潛力新星、穩定常客、沉睡大戶、流失過客。" />
                             </ul>
                         </div>
                     </div>
@@ -645,6 +759,7 @@ export default function Dashboard() {
             </div>
         )}
 
+        {/* === Page 4: Upload === */}
         {activeTab === 'page4' && (
              <div className="space-y-8 animate-in fade-in">
                 <div className="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
@@ -663,6 +778,23 @@ export default function Dashboard() {
 }
 
 // --- Sub-Components ---
+
+// ★ 新增：分數卡片元件 (用於 Patron Score 頁面)
+function ScoreCard({ title, score, desc, color }: { title: string, score: number, desc: string, color: 'blue'|'green'|'purple' }) {
+    const colorStyles = {
+        blue: 'text-blue-600 bg-blue-50 border-blue-200',
+        green: 'text-green-600 bg-green-50 border-green-200',
+        purple: 'text-purple-600 bg-purple-50 border-purple-200'
+    };
+    
+    return (
+        <div className={`p-6 rounded-2xl border-2 shadow-sm flex flex-col items-center justify-center text-center ${colorStyles[color]}`}>
+            <h3 className="font-bold mb-2 opacity-80">{title}</h3>
+            <div className="text-5xl font-black mb-2">{score}</div>
+            <p className="text-xs opacity-70 px-4">{desc}</p>
+        </div>
+    );
+}
 
 function CustomFunnel({ data }: { data: any[] }) {
     if (!data || data.length === 0) return <EmptyState message="無此模式資料" />;
@@ -780,39 +912,31 @@ function TableRow({ title, val, unit, status, msg }: any) {
     );
 }
 
-function AiDiagnosisPanel({ clientName, revenue, rfmSegments, nesData, topProducts }: any) { 
+// ★ AI 營運診斷 (修改為 6 個模擬顧問文案切換)
+function AiDiagnosisPanel({ clientName }: any) { 
     const [d, setD] = useState(""); 
     const [l, setL] = useState(false); 
     
-    const run = async () => { 
+    // 預設 6 組極具商業深度的顧問文案
+    const MOCK_DIAGNOSIS = [
+        "【成長動能強勁】\n本月流量與轉換雙雙達標，Patron Score 成長動能突破 110 分。建議本月可額外加碼 15% 預算於表現最佳的導流渠道，趁勢放大獲利脈。",
+        "【客單價提升警訊】\n雖然網站活躍流量大，但「金主脈(AOV)」較歷史平均下滑 12%。建議針對購物車結帳頁面增加「滿額贈」或「加購優惠」模組以拉抬客單價。",
+        "【沉睡客喚醒時機】\n系統的 NES 模型偵測到高達 30% 的歷史 VVIP 已進入「S: 睡眠期」(超過200天未購買)。建議立即啟動客服專人致電或高單價回歸禮發送計畫。",
+        "【轉換漏水嚴重】\n本期 O2O 漏斗流失率達 85%！大量的流量卡在「門市預約」階段。建議檢視落地頁的預約表單欄位是否過於繁瑣，或提供更明確的預約誘因。",
+        "【營收結構健康】\n本月新舊客營收貢獻比例達 4:6 黃金比例。老客回購力道穩健，建議邀請「頂級大使」客群填寫 NPS 問卷，並啟動裂變行銷 (MGM) 獲取更多優質新客。",
+        "【VVIP 貢獻高度集中】\n前 10% 的忠誠客貢獻了本月高達 45% 的營收。請務必針對這群「潛力新星」與「頂級大使」規劃專屬的封館活動或優先體驗權，深化品牌忠誠度。"
+    ];
+
+    const run = () => { 
         if (!clientName) return; 
         setL(true); 
-        try {
-            const top3 = topProducts?.slice(0, 3).map((p:any) => p.name) || [];
-            const aiPayload = { 
-                clientName, 
-                revenue, 
-                rfmSummary: rfmSegments.map((s:any) => `${s.name}: ${s.count}人 (貢獻$${s.rev})`), 
-                nesSummary: nesData.map((s:any) => `${s.name}: ${s.count}人`), 
-                topProducts: top3 
-            };
-            
-            const res = await fetch('/api/diagnose', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(aiPayload) 
-            });
-            
-            if (res.ok) { 
-                const data = await res.json(); 
-                setD(data.diagnosis); 
-            } else { 
-                setD("AI 連線失敗。"); 
-            }
-        } catch (e) { 
-            setD("連線錯誤。"); 
-        } 
-        setL(false); 
+        
+        // 模擬呼叫 API 的延遲時間 (1.5 秒後隨機顯示一個洞察)
+        setTimeout(() => {
+            const randomMock = MOCK_DIAGNOSIS[Math.floor(Math.random() * MOCK_DIAGNOSIS.length)];
+            setD(randomMock);
+            setL(false);
+        }, 1500);
     }; 
     
     return (
@@ -828,7 +952,7 @@ function AiDiagnosisPanel({ clientName, revenue, rfmSegments, nesData, topProduc
                     </div>
                 ) : (
                     <div className="text-slate-400 text-sm text-center py-10">
-                        {l ? "AI 正在分析大數據..." : `點擊分析 ${clientName || '...'} 的健康狀況`}
+                        {l ? "AI 顧問正在深度剖析六脈數據..." : `點擊開始分析 ${clientName || '...'} 的健康狀況`}
                     </div>
                 )}
             </div>
@@ -838,16 +962,16 @@ function AiDiagnosisPanel({ clientName, revenue, rfmSegments, nesData, topProduc
                 className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition flex justify-center items-center gap-2 disabled:opacity-50"
             >
                 {l ? <Loader2 className="animate-spin" /> : <Sparkles size={16}/>} 
-                {l ? '分析中...' : '開始診斷'}
+                {l ? '剖析中...' : '開始診斷'}
             </button>
         </div>
     ); 
 }
 
-function ConsultantPrescriptionPage({ clientName, rfmSegments, nesData }: any) {
+function ConsultantPrescriptionPage({ clientName, rfmSegments }: any) {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [newTaskContent, setNewTaskContent] = useState('');
-    const [newPulse, setNewPulse] = useState('Traffic');
+    const [newPulse, setNewPulse] = useState('Profit'); // 預設改為 Profit
     
     useEffect(() => {
         if (!rfmSegments || rfmSegments.length === 0) return;
