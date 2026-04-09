@@ -14,13 +14,14 @@ import Papa from 'papaparse';
 import { createBrowserClient } from '@supabase/ssr';
 
 // --- Configuration ---
+// ★ 修改 1: 調整了順序，將「品牌脈(Profit)」移至第一個，並更名。
 const PULSE_CONFIG: Record<string, { label: string, icon: any, color: string, bg: string, border: string, text: string }> = {
+  'Profit': { label: '品牌脈', icon: CircleDollarSign, color: 'slate', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
   'Traffic': { label: '流量脈', icon: Users, color: 'blue', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
   'Conversion': { label: '轉換脈', icon: MousePointerClick, color: 'green', bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700' },
   'VIP': { label: '金主脈', icon: Gem, color: 'yellow', bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700' }, 
   'Retention': { label: '老主脈', icon: Repeat, color: 'red', bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700' }, 
   'Reputation': { label: '擁主脈', icon: MessageSquare, color: 'purple', bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' }, 
-  'Profit': { label: '獲利脈', icon: CircleDollarSign, color: 'slate', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' },
 };
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ff6b6b'];
@@ -61,9 +62,9 @@ export default function Dashboard() {
   const [nesData, setNesData] = useState<any[]>([]);
 
   const [pulseMetrics, setPulseMetrics] = useState({
+      profit: { value: 0, hasData: true, unit: '$' },            
       traffic: { value: null as number | null, hasData: false, unit: '人' },      
       conversion: { value: null as number | null, hasData: false, unit: '%' },    
-      profit: { value: 0, hasData: true, unit: '$' },            
       vip: { value: 0, hasData: true, unit: '$' },               
       retention: { value: 0, hasData: true, unit: '%' },         
       reputation: { value: null as number | null, hasData: false, unit: '分' }    
@@ -142,7 +143,7 @@ export default function Dashboard() {
 
   }, [gaRawData, txChanData, crossMode]);
 
-  // ★ 智慧洞察文字 (使用 useMemo 自動計算)
+  // ★ 智慧洞察文字
   const autoInsightText = useMemo(() => {
       const data = crossAnalysisData;
       if(data.length < 2) return "資料不足，無法產生交叉分析洞察。";
@@ -252,9 +253,9 @@ export default function Dashboard() {
         const overallConversionRate = totalActiveUsers > 0 ? (totalConversions / totalActiveUsers) * 100 : null;
 
         setPulseMetrics({
+            profit: { value: totalRev, hasData: totalRev > 0, unit: '$' },
             traffic: { value: totalActiveUsers > 0 ? totalActiveUsers : null, hasData: totalActiveUsers > 0, unit: '人' }, 
             conversion: { value: overallConversionRate, hasData: overallConversionRate !== null, unit: '%' }, 
-            profit: { value: totalRev, hasData: totalRev > 0, unit: '$' },
             vip: { value: avgAov, hasData: avgAov > 0, unit: '$' },
             retention: { value: repeatRate, hasData: totalCustomers > 0, unit: '%' },
             reputation: { value: null, hasData: false, unit: '分' } 
@@ -341,7 +342,8 @@ export default function Dashboard() {
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                     <div className="bg-blue-600 text-white w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-lg">S</div>
-                    <span className="text-lg font-bold text-slate-800 hidden md:block">SMEbig War Room</span>
+                    {/* ★ 修改 2: 系統名稱變更 */}
+                    <span className="text-lg font-bold text-slate-800 hidden md:block">SMEbig PatronOS™</span>
                 </div>
                 <div className="relative">
                     <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
@@ -388,14 +390,21 @@ export default function Dashboard() {
                     <h2 className="text-2xl font-bold text-slate-800">📊 {selectedClient} - 營運體檢</h2>
                     <p className="text-sm text-slate-500">以六脈指標動態評估品牌健康度</p>
                 </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        <button className="px-3 py-1 text-sm font-bold bg-white shadow rounded text-slate-800">全部期間</button>
+                        <button className="px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50" disabled>本年對比</button>
+                    </div>
+                </div>
             </div>
 
             {loading ? <LoadingSkeleton /> : (
             <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* ★ 順序已調整：品牌脈放第一 */}
+                    <PulseCard title="品牌脈 (總營收)" icon={<CircleDollarSign size={20}/>} color="slate" data={pulseMetrics.profit} trend={null} />
                     <PulseCard title="流量脈 (總訪客)" icon={<Users size={20}/>} color="blue" data={pulseMetrics.traffic} missingMsg="缺少網站流量數據 (GA)" trend={null} />
                     <PulseCard title="轉換脈 (留單率)" icon={<MousePointerClick size={20}/>} color="green" data={pulseMetrics.conversion} missingMsg="缺少網站流量數據 (GA)" trend={null} />
-                    <PulseCard title="獲利脈 (總營收)" icon={<CircleDollarSign size={20}/>} color="slate" data={pulseMetrics.profit} trend={null} />
                     <PulseCard title="金主脈 (客單價)" icon={<Gem size={20}/>} color="yellow" data={pulseMetrics.vip} trend={null} />
                     <PulseCard title="老主脈 (回購率)" icon={<Repeat size={20}/>} color="red" data={pulseMetrics.retention} trend={null} />
                     <PulseCard title="擁主脈 (NPS口碑)" icon={<MessageSquare size={20}/>} color="purple" data={pulseMetrics.reputation} missingMsg="缺少 NPS 分數與推薦碼數據" trend={null} />
@@ -418,7 +427,6 @@ export default function Dashboard() {
                                     <XAxis dataKey="year_month" />
                                     
                                     <YAxis yAxisId="left" tickFormatter={(val) => `$${(val/10000).toFixed(0)}w`} />
-                                    
                                     <YAxis yAxisId="right_traffic" orientation="right" tickFormatter={(val) => `${(val/1000).toFixed(1)}k`} />
                                     <YAxis yAxisId="right_conv" orientation="right" hide={true} domain={['auto', 'auto']} />
                                     
@@ -608,14 +616,14 @@ export default function Dashboard() {
         {activeTab === 'page5' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據大辭典與計算公式 (V14.2 完整版)</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><BookOpen className="text-blue-600"/> 數據大辭典與計算公式</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="font-bold text-lg mb-4 text-indigo-700 border-b border-indigo-100 pb-2">【基礎六脈指標】</h3>
                             <ul className="space-y-4">
+                                <SpecItem title="品牌脈 (Profit)" logic="SUM(Transactions.Amount)" desc="品牌的總營收。過濾掉退貨與零元訂單的淨額。" />
                                 <SpecItem title="流量脈 (Traffic)" logic="總活躍使用者 / 總行銷費用" desc="衡量網站流量與獲客成本。 🚩 註：請在上傳 GA 數據時，於未來加入行銷費用(Marketing Spend)以計算 ROI。" />
                                 <SpecItem title="轉換脈 (Conversion)" logic="(預約數 + 名單數) / 總活躍使用者" desc="衡量進站後成功留單的比率。" />
-                                <SpecItem title="獲利脈 (Profit)" logic="SUM(Transactions.Amount)" desc="品牌的總營收。過濾掉退貨與零元訂單的淨額。" />
                                 <SpecItem title="金主脈 (VIP)" logic="總營收 / 總訂單數" desc="每月的平均客單價 (AOV)。" />
                                 <SpecItem title="老主脈 (Retention)" logic="購買 2 次以上人數 / 總客戶數" desc="歷史區間內的回購黏著度。" />
                                 <SpecItem title="擁主脈 (Reputation)" logic="NPS 分數 / 推薦產生之業績" desc="衡量口碑擴散力。(需補充問卷與推薦碼數據)" />
