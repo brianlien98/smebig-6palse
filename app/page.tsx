@@ -1223,7 +1223,9 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments }: any) {
                         {poolTasks.map(t => (
                             <div key={t.id} className="bg-white p-3 rounded shadow-sm border border-slate-200 group">
                                 <div className="flex justify-between mb-1">
-                                    <span className={`text-[10px] px-1.5 rounded ${PULSE_CONFIG[t.pulse]?.bg} ${PULSE_CONFIG[t.pulse]?.text}`}>{this.t(PULSE_CONFIG[t.pulse]?.label)}</span>
+                                    <span className={`text-[10px] px-1.5 rounded ${PULSE_CONFIG[t.pulse]?.bg} ${PULSE_CONFIG[t.pulse]?.text}`}>
+                                        {t(PULSE_CONFIG[t.pulse]?.label)}
+                                    </span>
                                     <div className="opacity-0 group-hover:opacity-100 flex gap-1">
                                         <button onClick={() => moveTask(t.id, 'approved')} className="text-green-500"><CheckCircle size={16}/></button>
                                         <button onClick={() => deleteTask(t.id)} className="text-red-400"><Trash2 size={16}/></button>
@@ -1241,7 +1243,9 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments }: any) {
                         {approvedTasks.map(t => (
                             <div key={t.id} className="bg-white p-3 rounded shadow-sm border border-purple-200 group">
                                 <div className="flex justify-between mb-1">
-                                    <span className={`text-[10px] px-1.5 rounded ${PULSE_CONFIG[t.pulse]?.bg} ${PULSE_CONFIG[t.pulse]?.text}`}>{this.t(PULSE_CONFIG[t.pulse]?.label)}</span>
+                                    <span className={`text-[10px] px-1.5 rounded ${PULSE_CONFIG[t.pulse]?.bg} ${PULSE_CONFIG[t.pulse]?.text}`}>
+                                        {t(PULSE_CONFIG[t.pulse]?.label)}
+                                    </span>
                                     <button onClick={() => moveTask(t.id, 'active')} className="text-blue-500 opacity-0 group-hover:opacity-100 hover:bg-blue-50 p-1 rounded"><ArrowRight size={16}/></button>
                                 </div>
                                 <p className="text-sm text-slate-700">{t.content}</p>
@@ -1256,7 +1260,9 @@ function ConsultantPrescriptionPage({ clientName, rfmSegments }: any) {
                         {activeTasks.map(t => (
                             <div key={t.id} className="bg-white p-3 rounded shadow-sm border-l-4 border-blue-500">
                                 <div className="flex justify-between mb-1">
-                                    <span className={`text-[10px] px-1.5 rounded ${PULSE_CONFIG[t.pulse]?.bg} ${PULSE_CONFIG[t.pulse]?.text}`}>{this.t(PULSE_CONFIG[t.pulse]?.label)}</span>
+                                    <span className={`text-[10px] px-1.5 rounded ${PULSE_CONFIG[t.pulse]?.bg} ${PULSE_CONFIG[t.pulse]?.text}`}>
+                                        {t(PULSE_CONFIG[t.pulse]?.label)}
+                                    </span>
                                     <button onClick={() => moveTask(t.id, 'done')} className="text-slate-400 hover:text-green-600"><CheckCircle size={16}/></button>
                                 </div>
                                 <p className="text-sm text-slate-700 font-bold">{t.content}</p>
