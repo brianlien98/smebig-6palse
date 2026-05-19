@@ -112,6 +112,21 @@ const EN_DICT: Record<string, string> = {
   '數據大辭典與計算公式': 'Data Dictionary & Formulas',
   '【基礎六脈指標】': '[Base Pulse Metrics]',
   '【進階交叉分析與模型】': '[Advanced Models]',
+  
+  // ★ 新增：公式與定義的雙語翻譯
+  '總活躍使用者 / 總行銷費用': 'Total Active Users / Total Marketing Spend',
+  '(預約數 + 名單數) / 總活躍使用者': '(Appts + Leads) / Total Active Users',
+  '總營收 / 總訂單數': 'Total Revenue / Total Orders',
+  '購買 2 次以上人數 / 總客戶數': 'Repeat Customers (2+) / Total Customers',
+  'NPS 分數 / 推薦產生之業績': 'NPS Score / Referral Revenue',
+  'GA婚禮彌月流量 ➡️ 門市預約 ➡️ 實體成交客(TX) ➡️ 實體回購客': 'GA Wedding Traffic ➡️ Store Appts ➡️ Offline Buyers(TX) ➡️ Offline Repeat',
+  'GA節慶名單流量 ➡️ 節慶名單 ➡️ EC成交客(TX) ➡️ EC回購客': 'GA Festival Traffic ➡️ Festival Leads ➡️ EC Buyers(TX) ➡️ EC Repeat',
+  '1 - (本層數量 / 上一層數量)': '1 - (Current Stage Count / Prev Stage Count)',
+  '對應通路總營收 / 對應通路活躍流量': 'Channel Revenue / Channel Active Traffic',
+  '以六脈動態加權運算': 'Dynamic Weighted Calculation of 6 Pulses',
+  'RFM 模型分群': 'RFM Segmentation',
+  'N: 新客(<120天) / E: 活躍客(回購) / S: 沉睡客(>200天)': 'N: New (<120d) / E: Existing (Repeat) / S: Sleeping (>200d)',
+  
   '品牌的總營收。過濾掉退貨與零元訂單的淨額。': 'Total brand revenue. Net amount filtering out returns and zero-dollar orders.',
   '衡量網站流量與獲客成本。 🚩 註：請在上傳 GA 數據時，於未來加入行銷費用(Marketing Spend)以計算 ROI。': 'Measures website traffic and CAC. 🚩 Note: Add Marketing Spend when uploading GA data in the future to calculate ROI.',
   '衡量進站後成功留單的比率。': 'Measures the ratio of successful leads after entering the site.',
@@ -1484,13 +1499,14 @@ function LoadingSkeleton() {
 }
 
 function SpecItem({ title, logic, desc }: any) { 
+    const { t } = useI18n();
     return (
         <li className="border-b border-slate-100 pb-2">
             <div className="flex justify-between font-bold text-slate-800 mb-1">
-                <span>{title}</span>
-                <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-mono">{logic}</span>
+                <span>{t(title)}</span>
+                <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-mono">{t(logic)}</span>
             </div>
-            <p className="text-xs text-slate-500">{desc}</p>
+            <p className="text-xs text-slate-500">{t(desc)}</p>
         </li>
     ); 
 }
