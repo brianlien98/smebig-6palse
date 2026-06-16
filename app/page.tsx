@@ -8,7 +8,7 @@ import {
 import { 
   Loader2, PieChart as IconPie, Microscope, ListTodo, Upload, FileUp, 
   Bot, Flame, CheckCircle, Plus, ArrowRight, Sparkles, Trash2, BookOpen,
-  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus, Award
+  Users, MousePointerClick, Gem, Repeat, MessageSquare, CircleDollarSign, Info, Building2, AlertTriangle, TrendingUp, TrendingDown, Minus, Award, Lock
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { createBrowserClient } from '@supabase/ssr';
@@ -113,7 +113,6 @@ const EN_DICT: Record<string, string> = {
   '【基礎六脈指標】': '[Base Pulse Metrics]',
   '【進階交叉分析與模型】': '[Advanced Models]',
   
-  // ★ 新增：公式與定義的雙語翻譯
   '總活躍使用者 / 總行銷費用': 'Total Active Users / Total Marketing Spend',
   '(預約數 + 名單數) / 總活躍使用者': '(Appts + Leads) / Total Active Users',
   '總營收 / 總訂單數': 'Total Revenue / Total Orders',
@@ -142,7 +141,7 @@ const EN_DICT: Record<string, string> = {
   '宏觀檢視品牌目前的獲客健康度與流失危機。': 'Macroscopic view of current acquisition health and churn crisis.',
   '上傳資料庫': 'Upload Database',
   '支援上傳【交易紀錄】與【GA 流量數據】。': 'Supports uploading [Transactions] and [GA Data].',
-  '請輸入客戶名稱 (例如：CUPETIT)': 'Enter Client Name (e.g. CUPETIT)',
+  '請輸入客戶名稱 (例如：糕餅業範例)': 'Enter Client Name (e.g. Bakery Example)',
   '請先輸入客戶名稱！': 'Please enter a client name first!',
   '1. 交易訂單資料 (CSV)': '1. TX Data (CSV)',
   '2. GA 流量資料 (CSV)': '2. GA Traffic Data (CSV)',
@@ -170,6 +169,13 @@ const EN_DICT: Record<string, string> = {
   '指標 (Pulse)': 'Metric (Pulse)',
   '全期累計': 'Total Acc.',
   '資料狀態': 'Status',
+  // ★ Password Dictionary
+  '請設定存取密碼 (大小寫英數8碼)': 'Set Access Password (8 alphanumeric chars)',
+  '請輸入 8 碼英數密碼！': 'Password must be 8 alphanumeric characters!',
+  '請輸入查看資料的密碼': 'Please enter password to view data',
+  '密碼錯誤': 'Incorrect Password',
+  '確認': 'Confirm',
+  '取消': 'Cancel',
 };
 
 const I18nContext = createContext({ lang: 'zh', t: (k: string) => k });
@@ -200,8 +206,12 @@ export default function Dashboard() {
   const t = (k: string) => lang === 'en' ? (EN_DICT[k] || k) : k;
 
   const [activeTab, setActiveTab] = useState('page1');
+  
+  // ★ Auth States
   const [selectedClient, setSelectedClient] = useState<string>(''); 
   const [clientList, setClientList] = useState<string[]>([]); 
+  const [verifiedClients, setVerifiedClients] = useState<string[]>([]);
+  const [authModal, setAuthModal] = useState({ open: false, client: '', password: '', error: '' });
   
   // Data States
   const [gaRawData, setGaRawData] = useState<any[]>([]);
@@ -213,19 +223,14 @@ export default function Dashboard() {
   const [rfmData, setRfmData] = useState<any[]>([]);
   const [cohortData, setCohortData] = useState<any[]>([]);
   
-  // 漏斗狀態
   const [funnelMode, setFunnelMode] = useState<'wedding' | 'festival'>('wedding');
   const [funnelDataWedding, setFunnelDataWedding] = useState<any[]>([]); 
   const [funnelDataFestival, setFunnelDataFestival] = useState<any[]>([]); 
   const [gaCategoryData, setGaCategoryData] = useState<any[]>([]); 
   
-  // 雙軌交叉分析模式
   const [crossMode, setCrossMode] = useState<'all' | 'offline' | 'ec'>('all');
-  
   const [rfmSegments, setRfmSegments] = useState<any[]>([]);
   const [nesData, setNesData] = useState<any[]>([]);
-
-  // Patron Score 狀態
   const [patronScores, setPatronScores] = useState<any[]>([]);
 
   const [pulseMetrics, setPulseMetrics] = useState({
@@ -238,6 +243,7 @@ export default function Dashboard() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
   
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -253,7 +259,6 @@ export default function Dashboard() {
         const allNames = [...(txData || []), ...(gaDataRes || [])].map(item => item.client_name).filter(Boolean);
         const uniqueClients = Array.from(new Set(allNames));
         setClientList(uniqueClients as string[]);
-        if (!selectedClient && uniqueClients.length > 0) setSelectedClient(uniqueClients[0] as string);
     } catch (e) { 
         console.error("Fetch clients error:", e); 
     }
@@ -267,14 +272,45 @@ export default function Dashboard() {
     if (selectedClient) refreshData(selectedClient);
   }, [selectedClient]);
 
-  // 動態構建交叉分析資料
+  // ★ 攔截：下拉選單變更時進行密碼檢查
+  const handleClientSelect = (e: any) => {
+      const targetClient = e.target.value;
+      if (verifiedClients.includes(targetClient)) {
+          setSelectedClient(targetClient);
+      } else {
+          setAuthModal({ open: true, client: targetClient, password: '', error: '' });
+      }
+  };
+
+  // ★ 處理密碼驗證
+  const handleAuthSubmit = async () => {
+      setAuthLoading(true);
+      try {
+          const { data, error } = await supabase
+              .from('client_profiles')
+              .select('password')
+              .eq('client_name', authModal.client)
+              .single();
+              
+          // 如果密碼相符 (或是該客戶剛好還沒設定密碼，為求相容暫時放行)
+          if (!data || data.password === authModal.password) {
+              setVerifiedClients(prev => [...prev, authModal.client]);
+              setSelectedClient(authModal.client);
+              setAuthModal({ open: false, client: '', password: '', error: '' });
+          } else {
+              setAuthModal(prev => ({ ...prev, error: t('密碼錯誤') }));
+          }
+      } catch (err) {
+          setAuthModal(prev => ({ ...prev, error: 'Database connection error' }));
+      }
+      setAuthLoading(false);
+  };
+
   const crossAnalysisData = useMemo(() => {
       const gaMonthMap: any = {};
-      
       gaRawData.forEach(g => {
           const isWedding = (g.category || '').includes('婚禮') || (g.category || '').includes('彌月');
           const isFestival = !isWedding; 
-          
           if (!gaMonthMap[g.year_month]) gaMonthMap[g.year_month] = { active_users: 0, conversions: 0 };
           
           if (crossMode === 'all' || (crossMode === 'offline' && isWedding) || (crossMode === 'ec' && isFestival)) {
@@ -317,10 +353,8 @@ export default function Dashboard() {
 
   }, [gaRawData, txChanData, crossMode]);
 
-  // ★ 核心功能：計算 Patron Score 三大分數
   useEffect(() => {
       if (crossAnalysisData.length === 0) return;
-
       const arr = crossAnalysisData;
       
       const getPr = (val: number, key: string) => {
@@ -328,7 +362,6 @@ export default function Dashboard() {
           const rank = sorted.findIndex(v => v >= val) + 1;
           return (rank / sorted.length) * 100;
       };
-      
       const getMom = (val: number, key: string, idx: number) => {
           if (idx === 0) return 100;
           const past = arr.slice(Math.max(0, idx - 6), idx).map(a => (a as any)[key]);
@@ -336,7 +369,6 @@ export default function Dashboard() {
           if (avg === 0) return val > 0 ? 150 : 100;
           return Math.min(150, (val / avg) * 100);
       };
-
       const getTar = (val: number, key: string) => {
           const max = Math.max(...arr.map(a => (a as any)[key]));
           if (max === 0) return 0;
@@ -349,7 +381,6 @@ export default function Dashboard() {
           const rankScore = (getPr(d.revenue, 'revenue') * w.rev + getPr(d.active_users, 'active_users') * w.traffic + getPr(d.conv_rate, 'conv_rate') * w.conv + getPr(d.aov, 'aov') * w.aov + getPr(d.rpv, 'rpv') * w.rpv);
           const momScore = (getMom(d.revenue, 'revenue', index) * w.rev + getMom(d.active_users, 'active_users', index) * w.traffic + getMom(d.conv_rate, 'conv_rate', index) * w.conv + getMom(d.aov, 'aov', index) * w.aov + getMom(d.rpv, 'rpv', index) * w.rpv);
           const tarScore = (getTar(d.revenue, 'revenue') * w.rev + getTar(d.active_users, 'active_users') * w.traffic + getTar(d.conv_rate, 'conv_rate') * w.conv + getTar(d.aov, 'aov') * w.aov + getTar(d.rpv, 'rpv') * w.rpv);
-
           return {
               year_month: d.year_month,
               [t('歷史排位')]: Math.round(rankScore),
@@ -357,11 +388,9 @@ export default function Dashboard() {
               [t('目標達成')]: Math.round(tarScore)
           };
       });
-
       setPatronScores(scores);
   }, [crossAnalysisData, lang]);
 
-  // ★ 智慧洞察文字
   const autoInsightText = useMemo(() => {
       const data = crossAnalysisData;
       if(data.length < 2) return lang === 'en' ? "Insufficient data for cross-analysis insights." : "資料不足，無法產生交叉分析洞察。";
@@ -551,8 +580,10 @@ export default function Dashboard() {
     setLoading(false);
   };
 
+  // ★ 當上傳成功時，將該客戶加入已驗證名單，避免剛上傳完還要輸入密碼
   const handleUploadSuccess = (newClientName: string) => {
       fetchClients();
+      setVerifiedClients(prev => [...prev, newClientName]);
       setSelectedClient(newClientName);
       setActiveTab('page1');
   };
@@ -560,6 +591,46 @@ export default function Dashboard() {
   return (
     <I18nContext.Provider value={{ lang, t }}>
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
+      
+      {/* ★ 密碼驗證視窗 (Auth Modal) */}
+      {authModal.open && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm animate-in fade-in zoom-in-95">
+                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4 mx-auto">
+                      <Lock size={24} />
+                  </div>
+                  <h3 className="text-xl font-bold text-center text-slate-800 mb-2">{t('請輸入查看資料的密碼')}</h3>
+                  <p className="text-sm text-center text-slate-500 mb-6">{authModal.client}</p>
+                  
+                  <input 
+                      type="password" 
+                      placeholder="Password (8 chars)" 
+                      value={authModal.password}
+                      onChange={(e) => setAuthModal(prev => ({ ...prev, password: e.target.value, error: '' }))}
+                      className="w-full border-2 border-slate-200 p-3 rounded-xl focus:border-blue-500 focus:outline-none mb-2"
+                      onKeyDown={(e) => e.key === 'Enter' && handleAuthSubmit()}
+                  />
+                  {authModal.error && <p className="text-red-500 text-sm mb-4 text-center">{authModal.error}</p>}
+                  
+                  <div className="flex gap-3 mt-6">
+                      <button 
+                          onClick={() => setAuthModal({ open: false, client: '', password: '', error: '' })}
+                          className="flex-1 py-3 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      >
+                          {t('取消')}
+                      </button>
+                      <button 
+                          onClick={handleAuthSubmit}
+                          disabled={authLoading}
+                          className="flex-1 py-3 rounded-xl font-bold bg-blue-600 text-white shadow-md hover:bg-blue-700 flex items-center justify-center"
+                      >
+                          {authLoading ? <Loader2 className="animate-spin" size={20} /> : t('確認')}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <nav className="bg-white shadow-md sticky top-0 z-50 px-6">
         <div className="max-w-7xl mx-auto h-16 flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -570,9 +641,10 @@ export default function Dashboard() {
                 <div className="relative flex items-center gap-2">
                     <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
                         <Building2 size={16} className="text-slate-500"/>
+                        {/* ★ 下拉選單改綁定 handleClientSelect 觸發驗證 */}
                         <select 
                             value={selectedClient} 
-                            onChange={(e) => setSelectedClient(e.target.value)}
+                            onChange={handleClientSelect}
                             className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer min-w-[120px]"
                         >
                             <option value="" disabled>{t('請選擇客戶...')}</option>
@@ -1294,6 +1366,7 @@ function DataUploader({ supabase, onSuccess }: any) {
     const { t } = useI18n();
     const [uploading, setUploading] = useState(false); 
     const [clientName, setClientName] = useState(""); 
+    const [clientPassword, setClientPassword] = useState(""); // ★ 新增密碼狀態
     const [uploadType, setUploadType] = useState('tx'); 
     const [encoding, setEncoding] = useState('UTF-8'); 
     const [msg, setMsg] = useState(""); 
@@ -1301,11 +1374,21 @@ function DataUploader({ supabase, onSuccess }: any) {
     
     const handleFile = (e: any) => { 
         setErrorDetails(""); 
+        
         if (!clientName.trim()) { 
             alert(t("請先輸入客戶名稱！")); 
             e.target.value = ''; 
             return; 
         }
+        
+        // ★ 密碼格式驗證
+        const passRegex = /^[A-Za-z0-9]{8}$/;
+        if (!passRegex.test(clientPassword)) {
+            alert(t("請輸入 8 碼英數密碼！"));
+            e.target.value = '';
+            return;
+        }
+
         const file = e.target.files[0]; 
         if (!file) return; 
         
@@ -1381,11 +1464,20 @@ function DataUploader({ supabase, onSuccess }: any) {
                 setMsg(`Uploading ${cleanRows.length} rows...`);
                 const BATCH_SIZE = 1000; 
                 try {
+                    // ★ 上傳資料前，先更新/寫入客戶密碼
+                    const { error: profileErr } = await supabase
+                        .from('client_profiles')
+                        .upsert({ client_name: clientName, password: clientPassword });
+                        
+                    if (profileErr) throw new Error('Failed to set password: ' + profileErr.message);
+
+                    // 上傳資料
                     const targetTable = uploadType === 'tx' ? 'transactions' : 'ga_analytics';
                     for (let i = 0; i < cleanRows.length; i += BATCH_SIZE) { 
                         const { error } = await supabase.from(targetTable).insert(cleanRows.slice(i, i + BATCH_SIZE)); 
                         if(error) throw error;
                     } 
+                    
                     setMsg("🎉 Upload Success!");
                     setUploading(false); 
                     e.target.value = '';
@@ -1402,16 +1494,30 @@ function DataUploader({ supabase, onSuccess }: any) {
     }; 
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <input 
                 type="text" 
                 value={clientName} 
                 onChange={(e) => setClientName(e.target.value)} 
-                placeholder={t("請輸入客戶名稱 (例如：CUPETIT)")} 
+                placeholder={t("請輸入客戶名稱 (例如：糕餅業範例)")} 
                 className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
             />
+            {/* ★ 新增：密碼設定欄位 */}
+            <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Lock size={18} />
+                </div>
+                <input 
+                    type="password" 
+                    value={clientPassword} 
+                    onChange={(e) => setClientPassword(e.target.value)} 
+                    placeholder={t("請設定存取密碼 (大小寫英數8碼)")} 
+                    maxLength={8}
+                    className="w-full border p-3 pl-10 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+            </div>
             
-            <div className="flex gap-4">
+            <div className="flex gap-4 pt-2">
                 <button 
                     onClick={() => {setUploadType('tx'); setErrorDetails("");}} 
                     className={`flex-1 py-3 rounded-xl font-bold transition-all ${uploadType === 'tx' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
@@ -1426,7 +1532,7 @@ function DataUploader({ supabase, onSuccess }: any) {
                 </button>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between mt-2">
                 <span className="text-sm font-bold text-slate-600">{t('📂 檔案編碼 (若出現亂碼請切換)')}</span>
                 <select 
                     value={encoding} 
@@ -1439,7 +1545,7 @@ function DataUploader({ supabase, onSuccess }: any) {
                 </select>
             </div>
 
-            <div className={`border-2 border-dashed p-10 text-center cursor-pointer transition-all rounded-2xl relative ${uploadType === 'tx' ? 'border-blue-300 bg-blue-50/50 hover:bg-blue-50' : 'border-green-300 bg-green-50/50 hover:bg-green-50'}`}>
+            <div className={`border-2 border-dashed p-10 text-center cursor-pointer transition-all rounded-2xl relative mt-2 ${uploadType === 'tx' ? 'border-blue-300 bg-blue-50/50 hover:bg-blue-50' : 'border-green-300 bg-green-50/50 hover:bg-green-50'}`}>
                 <input type="file" accept=".csv" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" disabled={uploading} />
                 <div className="flex flex-col items-center gap-3">
                     {uploading ? <Loader2 className="animate-spin w-10 h-10 text-slate-400"/> : <FileUp size={48} className={uploadType === 'tx' ? 'text-blue-500' : 'text-green-500'}/>}
