@@ -223,7 +223,7 @@ export default function HomePage() {
               </span>
               <h2 className="text-3xl md:text-5xl font-extrabold text-white">{slides[2].title}</h2>
               <p className="text-slate-400 text-sm md:text-base">
-                提供模組化、高落地性的 B2B 顧問交付流程，不讓流程與規格成為經營者的負擔。
+                提供模組化、高落地性的 B2B 顧問交付流程，不讓流程與規格成為經營者負擔。
               </p>
             </div>
 
@@ -326,7 +326,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Slide 6: 系統開發與企劃溝通專區 (會議對照討論使用，高資訊密度) */}
+        {/* Slide 6: 系統開發與企劃溝通專區 (100% 符號轉譯修正，編譯安全解鎖) */}
         <section 
           id="slide-5"
           data-slide-id="5"
@@ -344,7 +344,7 @@ export default function HomePage() {
               </div>
               <div className="flex gap-2">
                 <span className="bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-1 rounded text-xs font-mono">STATUS: DRAFT</span>
-                <span className="bg-slate-900 text-slate-400 border border-slate-800 px-2 py-1 rounded text-xs font-mono">VER: 1.0.4</span>
+                <span className="bg-slate-900 text-slate-400 border border-slate-800 px-2 py-1 rounded text-xs font-mono">VER: 1.0.5</span>
               </div>
             </div>
 
@@ -357,7 +357,7 @@ export default function HomePage() {
                   <Activity size={18} /> 1. 品牌視覺與 Labsology 智識風規範
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  導入 Labsology 風格底色系統 (<code className="text-orange-400">#0B0C10</code>)，主文字採用冷白與鈦灰。全站劃分細灰色網格實線，取代無意義的留白與動態。
+                  導入 Labsology 風格底色系統（#0B0C10），主文字採用冷白與鈦灰。全站劃分細灰色網格實線，取代無意義的留白與動態。
                 </p>
                 <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono text-xs text-slate-400 space-y-1">
                   <div>- 核心點綴色：高飽和度企業橘 (HEX #F97316)</div>
@@ -372,7 +372,7 @@ export default function HomePage() {
                   <Layers size={18} /> 2. 前台 PatronOS™ 診斷核心語意
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  將二十年顧問經驗提煉為「品牌、流量、轉換、金主、老主、擁主」六脈營運數據。在 <code className="text-orange-400">/services/patronOS</code> 設定高互動式網格 (Interactive Matrix)。
+                  將二十年顧問經驗提煉為「品牌、流量、轉換、金主、老主、擁主」六脈營運數據。在 /services/patronOS 設定高互動式網格 (Interactive Matrix)。
                 </p>
                 <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono text-xs text-slate-400">
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
@@ -414,7 +414,7 @@ export default function HomePage() {
                   <Code2 size={18} /> 4. Brandbase 經銷管理 SOP 系統化路徑
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  遵照「先有案實作 ──> 提煉 SOP 範本 ──> 系統化（AI工具化）」的漸進式開發路徑，避免盲目開發與高轉錄成本。
+                  遵照「先有案實作 ──➔ 提煉 SOP 範本 ──➔ 系統化（AI工具化）」的漸進式開發路徑，避免盲目開發與高轉錄成本。
                 </p>
                 <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono text-xs text-slate-400 space-y-1 text-[11px]">
                   <div>- 1. 案源實作：顧問為夥伴直接執行品牌一口話定位與社群交付</div>
