@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronUp, ChevronDown, ArrowRight, CircleDollarSign, Users, 
   MousePointerClick, Gem, Repeat, MessageSquare, Award, Sparkles, 
-  Building2, ArrowUpRight, CheckCircle2, ShieldCheck, Printer,
-  FileText, CheckSquare, Layers, Code2, Database, Activity, AlertTriangle
+  Building2, ArrowUpRight, CheckCircle2, ShieldCheck, 
+  Layers, Code2, Database, Activity, AlertTriangle, ExternalLink, HelpCircle
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -26,7 +26,7 @@ export default function HomePage() {
     { id: 2, badge: "SERVICE SOLUTIONS", title: "模組化整合解決方案", subtitle: "從 brandbase 品牌建置到 PitronOS 診斷執行顧問" },
     { id: 3, badge: "ELITE ARCHITECTS", title: "品牌架構師與專家顧問團隊", subtitle: "以嚴謹的企管架構，為中小企業精準配對專案解方" },
     { id: 4, badge: "DECISION PORTAL", title: "啟動您的品牌轉型", subtitle: "立即與智策慧攜手，將混亂的經營流程轉化為數位營運資產" },
-    { id: 5, badge: "DEV SPECIFICATION", title: "系統開發與企劃溝通專區", subtitle: "（本頁僅開發會議討論使用，包含系統架構、工作流與 DDL）" }
+    { id: 5, badge: "DEV SPECIFICATION", title: "系統開發與企劃溝通專區", subtitle: "（本頁為智策慧內部開發規格書，包含 5W 深度系統解讀與 DDL）" }
   ];
 
   // 滾動偵測：使用 IntersectionObserver 自動更新當前 Slide 狀態
@@ -82,8 +82,8 @@ export default function HomePage() {
           </button>
           <Link href="/cases" className="hover:text-white transition">客戶實績</Link>
           <Link href="/insights" className="hover:text-white transition">智庫觀點</Link>
-          <button onClick={() => scrollToSlide(5)} className="text-xs bg-slate-800 text-orange-400 px-3 py-1.5 rounded border border-orange-500/20 hover:bg-slate-700 transition font-mono">
-            DEV後台企劃
+          <button onClick={() => scrollToSlide(5)} className="text-xs bg-slate-900 text-orange-400 px-3 py-1.5 rounded border border-orange-500/35 hover:bg-slate-800 transition font-mono">
+            DEV後台企劃書
           </button>
           <Link href="/contact" className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg transition shadow-md shadow-orange-500/10">預約諮詢</Link>
         </nav>
@@ -318,15 +318,15 @@ export default function HomePage() {
               </Link>
               <button 
                 onClick={() => scrollToSlide(5)}
-                className="w-full sm:w-auto px-8 py-4 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold rounded-xl border border-slate-850 transition text-center"
+                className="w-full sm:w-auto px-8 py-4 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold rounded-xl border border-slate-850 transition text-center animate-pulse"
               >
-                架構與開發會議專區 (後台企劃)
+                進入官網建置大綱與 DDL 控制台
               </button>
             </div>
           </div>
         </section>
 
-        {/* Slide 6: 系統開發與企劃溝通專區 (100% 符號轉譯修正，編譯安全解鎖) */}
+        {/* Slide 6: 系統開發與企劃溝通專區 (整合 5W 脈絡化深度說明 & DDL 規劃) */}
         <section 
           id="slide-5"
           data-slide-id="5"
@@ -339,100 +339,187 @@ export default function HomePage() {
                 <span className="px-3 py-1 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 text-xs font-mono font-bold tracking-wider">
                   {slides[5].badge}
                 </span>
-                <h2 className="text-2xl md:text-4xl font-bold text-white mt-2">智策慧新官網建構及運營系統企劃書</h2>
-                <p className="text-xs text-slate-500 mt-1">本頁面僅在開發會議討論中，提供架構師、顧問與系統開發團隊直接進行細節審核使用。</p>
+                <h2 className="text-2xl md:text-4xl font-bold text-white mt-2">智策慧新官網建構及數位運營系統規劃書</h2>
+                <p className="text-xs text-slate-500 mt-1">本頁面為智策慧開發期會議專用，包含 5W 系統診斷解析、專案預算管理模型與系統底層 DDL 規劃。</p>
               </div>
               <div className="flex gap-2">
                 <span className="bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-1 rounded text-xs font-mono">STATUS: DRAFT</span>
-                <span className="bg-slate-900 text-slate-400 border border-slate-800 px-2 py-1 rounded text-xs font-mono">VER: 1.0.5</span>
+                <span className="bg-slate-900 text-slate-400 border border-slate-800 px-2 py-1 rounded text-xs font-mono">VER: 1.1.2</span>
               </div>
             </div>
 
-            {/* 企劃主體 5 大版塊 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-sm">
+            {/* 標桿參考區 */}
+            <div className="p-4 rounded-xl border border-orange-500/20 bg-orange-500/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-orange-400 flex items-center gap-1.5">
+                  <ExternalLink size={16} /> 視覺設計與排版標桿標記 (Labsology Benchmark)
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  本系統前端視覺之排版、微動態延遲、無襯線高字體密度排版，完全對標知名數位智識設計團隊：
+                  <a href="https://labsology.com/" target="_blank" rel="noopener noreferrer" className="text-orange-400 font-bold underline hover:text-orange-300 ml-1 inline-flex items-center gap-1">
+                    labsology.com <ExternalLink size={12} />
+                  </a>
+                </p>
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 bg-slate-900 border border-slate-800 px-2 py-1 rounded">
+                極致暗黑 (#0B0C10) | 細微格實線 (#1F242E)
+              </span>
+            </div>
+
+            {/* 1. 未來官網完整架構規劃 */}
+            <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/25 space-y-4">
+              <h3 className="font-bold text-lg text-orange-400 flex items-center gap-2">
+                <Building2 size={18} /> A. 未來官網完整資料夾與頁面架構
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div className="bg-slate-950 p-4 rounded border border-slate-900 space-y-2">
+                  <div className="font-bold text-white border-b border-slate-800 pb-1">/ (前台獲客入口)</div>
+                  <ul className="space-y-1.5 text-slate-400">
+                    <li>• <span className="text-slate-200 font-mono">/</span>: 首頁 (企業定位、三幕劇、精選實績)</li>
+                    <li>• <span className="text-slate-200 font-mono">/about</span>: 關於我們 (理念、認證架構師簡介)</li>
+                    <li>• <span className="text-slate-200 font-mono">/services</span>: 服務方案首頁</li>
+                    <li>• <span className="text-slate-200 font-mono">/services/brandbase</span>: brandbase™ 建置專區</li>
+                    <li>• <span className="text-slate-200 font-mono">/services/patronOS</span>: 品牌六脈診斷專區</li>
+                  </ul>
+                </div>
+                <div className="bg-slate-950 p-4 rounded border border-slate-900 space-y-2">
+                  <div className="font-bold text-white border-b border-slate-800 pb-1">/ (動態實績與觀點)</div>
+                  <ul className="space-y-1.5 text-slate-400">
+                    <li>• <span className="text-slate-200 font-mono">/cases</span>: 客戶實績 (Searchable Select 篩選)</li>
+                    <li>• <span className="text-slate-200 font-mono">/insights</span>: 智庫觀點 (專家專欄、白皮書)</li>
+                    <li>• <span className="text-slate-200 font-mono">/insights/[id]</span>: 觀點詳情 (SEO與Schema.org)</li>
+                    <li>• <span className="text-slate-200 font-mono">/consultant</span>: 顧問與專業架構師登錄資料</li>
+                    <li>• <span className="text-slate-200 font-mono">/contact</span>: 自測與諮詢預約表單</li>
+                  </ul>
+                </div>
+                <div className="bg-slate-950 p-4 rounded border border-slate-900 space-y-2">
+                  <div className="font-bold text-white border-b border-slate-800 pb-1">/admin (內部運營後台)</div>
+                  <ul className="space-y-1.5 text-slate-400">
+                    <li>• <span className="text-slate-200 font-mono">/admin/posts</span>: 觀點文章發布 (R2圖床)</li>
+                    <li>• <span className="text-slate-200 font-mono">/admin/consultants</span>: 顧問與配案管理</li>
+                    <li>• <span className="text-slate-200 font-mono">/admin/projects</span>: 預算核算專案追蹤系統</li>
+                    <li>• <span className="text-slate-200 font-mono">/admin/clients</span>: 案源 CRM 資料庫</li>
+                    <li>• <span className="text-slate-200 font-mono">/admin/pitronos</span>: 客戶六脈數據上傳(TX, GA)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. PatronOS 脈絡化深度系統解讀 */}
+            <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/25 space-y-6">
+              <h3 className="font-bold text-lg text-orange-400 flex items-center gap-2">
+                <HelpCircle size={18} /> B. PatronOS™ 品牌作業系統之 5W 脈絡化解析
+              </h3>
               
-              {/* 版塊 1: 視覺與品牌設計語彙 */}
-              <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/20 space-y-3">
-                <h3 className="font-bold text-lg text-orange-400 flex items-center gap-2">
-                  <Activity size={18} /> 1. 品牌視覺與 Labsology 智識風規範
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  導入 Labsology 風格底色系統（#0B0C10），主文字採用冷白與鈦灰。全站劃分細灰色網格實線，取代無意義的留白與動態。
-                </p>
-                <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono text-xs text-slate-400 space-y-1">
-                  <div>- 核心點綴色：高飽和度企業橘 (HEX #F97316)</div>
-                  <div>- 微互動模組：滑鼠 Hover 時框線亮起 + Sparklines 動態圖表</div>
-                  <div>- 設計目標：呈現「品牌架構師」與「數位營運作業系統」的嚴謹科學感</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs leading-relaxed">
+                <div className="space-y-3 bg-slate-950 p-5 rounded border border-slate-900">
+                  <h4 className="text-sm font-bold text-white border-l-2 border-orange-500 pl-2">1. 什麼是 PatronOS™ (What)</h4>
+                  <p className="text-slate-400">
+                    PatronOS™ 是智策慧將 **20年品牌顧問實戰驗證** 提煉出的「主顧客品牌作業系統 (6脈18掌)」。它不只是一個行銷工具 (MarTech)，而是一套從底層串接 **「品牌主張 ──➔ 觸點觸及 ──➔ 顧客獲客 ──➔ 轉換 ──➔ 回購 ──➔ 推薦與聲譽」** 的長期系統。
+                  </p>
+                </div>
+
+                <div className="space-y-3 bg-slate-950 p-5 rounded border border-slate-900">
+                  <h4 className="text-sm font-bold text-white border-l-2 border-orange-500 pl-2">2. 為什麼要用 PatronOS™ (Why)</h4>
+                  <p className="text-slate-400">
+                    多數中小企業面臨以下痛點：做很多 Campaign 卻無法累積資產、資料散落流程斷裂、團隊靠人工拼接。PatronOS™ 將行銷成果從「租來的流量」轉為「留下來的品牌資產」，實現數據主權 (Digital Sovereignty) 回到企業手上。
+                  </p>
+                </div>
+
+                <div className="space-y-3 bg-slate-950 p-5 rounded border border-slate-900">
+                  <h4 className="text-sm font-bold text-white border-l-2 border-orange-500 pl-2">3. 如何使用 PatronOS™ (How)</h4>
+                  <p className="text-slate-400">
+                    依循 Kotler 經典行銷組合 (G-STIG-STIC) 模型，利用「六脈十八掌」將品牌定義、導入需求、推進成交、放大客值、養成熟客、推薦擁護這 6 個維度分別對應 3 個執行對策。透過系統後台，將每一步行銷沉澱為可複利的資產。
+                  </p>
+                </div>
+
+                <div className="space-y-3 bg-slate-950 p-5 rounded border border-slate-900">
+                  <h4 className="text-sm font-bold text-white border-l-2 border-orange-500 pl-2">4. 何時用與哪裡用 (When & Where)</h4>
+                  <p className="text-slate-400">
+                    <strong className="text-orange-400">何時用：</strong> 品牌重劃期 (統一主張觸點)、成長瓶頸期 (解決成交痛點) 與數位轉型期。
+                    <br />
+                    <strong className="text-orange-400">哪裡用：</strong> 前台預約 (/contact) 可供客戶進行「品牌健康度線上自測」；內部則是在後台數據儀表板，將 transactions 交易與 GA 資料實時生成對應的分析指標。
+                  </p>
                 </div>
               </div>
+            </div>
 
-              {/* 版塊 2: PatronOS™ 核心內容架構 (六脈十八掌) */}
-              <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/20 space-y-3">
+            {/* 3. 專案控制流與 Brandbase 經銷管理系統 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-xs">
+              
+              {/* 專案控制 */}
+              <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/25 space-y-4">
                 <h3 className="font-bold text-lg text-orange-400 flex items-center gap-2">
-                  <Layers size={18} /> 2. 前台 PatronOS™ 診斷核心語意
+                  <Layers size={18} /> C. 專案控制流 (預算 ──➔ Milestones ──➔ 核算)
                 </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  將二十年顧問經驗提煉為「品牌、流量、轉換、金主、老主、擁主」六脈營運數據。在 /services/patronOS 設定高互動式網格 (Interactive Matrix)。
-                </p>
-                <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono text-xs text-slate-400">
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div>- 品牌脈: 01主張掌/02觸點掌</div>
-                    <div>- 流量脈: 04創流掌/05導流掌</div>
-                    <div>- 轉換脈: 07解痛掌/08對症掌</div>
-                    <div>- 金主脈: 10集點掌/11升級掌</div>
+                <div className="space-y-3 text-slate-400">
+                  <div className="bg-slate-950 p-3 rounded border border-slate-900">
+                    <span className="font-bold text-white">1. 預算編列：</span> 指派「品牌首席架構師」、分配顧問預估工時 (FTE)，確立外包專案可動用成本。
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded border border-slate-900">
+                    <span className="font-bold text-white">2. 里程碑檢核：</span> 交付物直接關聯「六脈十八掌」。如完成「01主張掌、02觸點掌」，自動將交付報告備份至 Cloudflare R2。
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded border border-slate-900">
+                    <span className="font-bold text-white">3. 毛利核算：</span> 結合顧問 Timesheet 底薪折算。當專案實際毛利率低於預警線，後台系統發出紅/黃色警戒。
                   </div>
                 </div>
               </div>
 
-              {/* 版塊 3: 後台專案管理：從預算至核算 (Budget-to-Settlement) */}
-              <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/20 space-y-3 lg:col-span-2">
+              {/* Brandbase 經銷管理 SOP 系統化路徑 */}
+              <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/25 space-y-4">
                 <h3 className="font-bold text-lg text-orange-400 flex items-center gap-2">
-                  <CheckSquare size={18} /> 3. 後台：預算到核算控制流 (Budget-to-Settlement PM)
+                  <Code2 size={18} /> D. Brandbase 代理/經銷商「實作 SOP ──➔ 系統化」路徑
                 </h3>
-                <p className="text-xs text-slate-400">
-                  將合約財務生命週期與六脈交付里程碑進行強烈綁定，解決 B2B 顧問案進度落後與人工成本溢出問題。
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs text-slate-400">
-                  <div className="bg-slate-950 p-3 rounded border border-slate-900 space-y-1">
-                    <div className="text-orange-400 font-bold">1. 預算編列</div>
-                    <div className="text-[11px]">後台錄入合約金額、分配首席與協同顧問、鎖定預估工時 (FTE)。</div>
+                <div className="space-y-3 text-slate-400 leading-relaxed">
+                  <p>智策慧採用漸進式系統化開發邏輯，防止資源盲目投放：</p>
+                  <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono space-y-1">
+                    <div className="text-orange-400 font-bold">Phase 1. 先有案執行 (實作)</div>
+                    <div>由智策慧專家為客戶/夥伴進行實作 (品牌故事三部曲、一句話定位、社群貼文規劃)，確保累積真實數據。</div>
                   </div>
-                  <div className="bg-slate-950 p-3 rounded border border-slate-900 space-y-1">
-                    <div className="text-orange-400 font-bold">2. 里程碑與工時</div>
-                    <div className="text-[11px]">任務自動與「十八掌」交付物掛鉤。顧問週報 Timesheet，即時累計人力折算成本。</div>
+                  <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono space-y-1">
+                    <div className="text-orange-400 font-bold">Phase 2. 提煉標準化範本 (SOP)</div>
+                    <div>歸納最佳實踐 (Best Practice)，提煉出品牌故事架構、AI 最佳提示詞 (Prompts) 標準流。</div>
                   </div>
-                  <div className="bg-slate-950 p-3 rounded border border-slate-900 space-y-1">
-                    <div className="text-orange-400 font-bold">3. 核算與預警</div>
-                    <div className="text-[11px]">系統依公式計算即時毛利率，低於水位線立即亮起黃/紅燈警報。</div>
+                  <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono space-y-1">
+                    <div className="text-orange-400 font-bold">Phase 3. 系統工具化部署 (Systematize)</div>
+                    <div>將 SOP 程式化為 BrandBase 的「一句話定位生成器」、「AI 腳本提示器」與「CRM 聲量整合模組」。</div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* 版塊 4: Brandbase SOP 系統化 */}
-              <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/20 space-y-3">
-                <h3 className="font-bold text-lg text-orange-400 flex items-center gap-2">
-                  <Code2 size={18} /> 4. Brandbase 經銷管理 SOP 系統化路徑
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  遵照「先有案實作 ──➔ 提煉 SOP 範本 ──➔ 系統化（AI工具化）」的漸進式開發路徑，避免盲目開發與高轉錄成本。
-                </p>
-                <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono text-xs text-slate-400 space-y-1 text-[11px]">
-                  <div>- 1. 案源實作：顧問為夥伴直接執行品牌一口話定位與社群交付</div>
-                  <div>- 2. 蒸餾 SOP：確立品牌故事三部曲與 AI 最佳 Prompts 流程</div>
-                  <div>- 3. 數位系統化：後台落地為 01會員客服、02會員智庫、03獨家AI代理工具 (一句話定位、AI海報生成、QSearch聲量儀表)</div>
-                </div>
-              </div>
+            {/* 4. 底層資料庫 DDL 規劃 */}
+            <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/25 space-y-4">
+              <h3 className="font-bold text-lg text-orange-400 flex items-center gap-2">
+                <Database size={18} /> E. 底層資料庫 DDL 規劃 (Supabase Client Safe)
+              </h3>
+              <p className="text-xs text-slate-400">專案管理、顧問、回報紀錄、觀點發布之核心 Postgres 結構：</p>
+              <div className="bg-slate-950 p-4 rounded border border-slate-900 font-mono text-xs text-slate-400 max-h-[250px] overflow-y-auto">
+                <pre>{`-- 1. 顧問與架構師登錄檔
+CREATE TABLE consultants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    title TEXT, -- 如：資深品牌架構師
+    specialty TEXT[], -- 專業領域標籤
+    avatar_url TEXT, -- 儲存於 Cloudflare R2
+    status TEXT DEFAULT 'pending', -- pending, active, suspended
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-              {/* 版塊 5: 底層數據與模組關聯 SQL schema */}
-              <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/20 space-y-3">
-                <h3 className="font-bold text-lg text-orange-400 flex items-center gap-2">
-                  <Database size={18} /> 5. 底層數據與系統整合模型 (Database Schema)
-                </h3>
-                <p className="text-xs text-slate-400">
-                  全站採用 Supabase SSR 資料表，將前台預約、後台專案、與 Cloudflare R2 / Resend API 串聯。
-                </p>
-                <div className="bg-slate-950 p-3 rounded border border-slate-900 font-mono text-[11px] text-slate-400 max-h-[160px] overflow-y-auto">
-                  <pre>{`-- 專案管理資料表
+-- 2. 客戶與案源 CRM 表
+CREATE TABLE clients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_name TEXT UNIQUE NOT NULL,
+    contact_name TEXT,
+    contact_phone TEXT,
+    contact_email TEXT,
+    industry TEXT, 
+    brand_score_raw JSONB, -- 前台自測問卷原始回答
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. 預算核算專案管理表
 CREATE TABLE projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_name TEXT NOT NULL,
@@ -442,16 +529,25 @@ CREATE TABLE projects (
     budget NUMERIC,
     start_date DATE,
     end_date DATE,
-    deliverables TEXT, -- 六脈十八掌交付標的
+    deliverables TEXT, -- 十八掌對應之交付標的
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. 專案工作回報紀錄表
+CREATE TABLE project_reports (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    consultant_id UUID REFERENCES consultants(id) ON DELETE SET NULL,
+    report_content TEXT NOT NULL,
+    attachment_urls TEXT[], -- R2 附件報告連結
     created_at TIMESTAMPTZ DEFAULT NOW()
 );`}</pre>
-                </div>
               </div>
             </div>
-            
+
             <div className="bg-orange-500/5 p-4 rounded-xl border border-orange-500/20 text-xs flex gap-3 items-center text-slate-400">
               <AlertTriangle className="text-orange-500 shrink-0 animate-pulse" size={18} />
-              <span>本頁面為智策慧重建案開發專區。點擊右下角 <strong className="text-white">上箭頭 </strong> 即可返回前台 presentation 模式，或使用鼠標滾輪正常瀏覽。</span>
+              <span>本區塊為智策慧開發期規劃與 DDL 控制規格，點擊右下角 <strong className="text-white">上箭頭 </strong> 即可返回前台簡報 presentation 模式，或使用鼠標滾輪正常瀏覽。</span>
             </div>
           </div>
         </section>
@@ -464,7 +560,7 @@ CREATE TABLE projects (
 
 function PulseOverviewCard({ title, desc, icon, color }: { title: string, desc: string, icon: any, color: 'orange' }) {
   return (
-    <div className={`p-5 rounded-xl border border-slate-900 bg-slate-900/30 flex flex-col justify-between h-40 transition-all duration-300 hover:border-orange-500/30 hover:shadow-2xl hover:shadow-orange-500/5`}>
+    <div className={`p-5 rounded-xl border border-slate-900 bg-slate-900/30 flex flex-col justify-between h-40 transition-all duration-300 hover:border-orange-500/35 hover:shadow-2xl hover:shadow-orange-500/5`}>
       <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center border border-slate-850">
         {icon}
       </div>
