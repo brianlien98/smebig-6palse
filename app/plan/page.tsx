@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { 
   Briefcase, Users, Award, ShieldAlert, CheckCircle2, Calendar, Database,
-  TrendingUp, Code2, ExternalLink, ChevronRight, Play, Coins, Building2, HelpCircle
+  TrendingUp, Code2, ExternalLink, ChevronRight, Coins, Building2, HelpCircle, ArrowRight
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -49,9 +49,9 @@ export default function PlanPage() {
               <span className="text-slate-500 text-xs font-mono">NEXT.js APP ROUTER</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white mt-1">
-              智策慧官網重構與雙軌系統運營規格書
+              智策慧雙軌運營系統規劃規格書 (雙軌重構)
             </h1>
-            <p className="text-xs text-slate-500">本頁面為架構師與專案管理團隊會議專用之互動規格書，用以確認前後端數據與分潤指標。</p>
+            <p className="text-xs text-slate-500">本頁面為架構師、顧問與系統開發團隊會議專用，包含 5W 深度系統解讀、專案預算管理模型與系統底層 DDL 規劃。</p>
           </div>
           <div className="flex gap-4">
             <Link href="/" className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800 transition">
@@ -98,7 +98,7 @@ export default function PlanPage() {
                   <Briefcase size={18} /> 創辦人 Holmes 定位：Guru of Systematic Tech Branding
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  官網將捨棄傳統「公司名片式」陳述，全面塑造創辦人陳茂鴻 (Holmes) 作為「系統化品牌作業系統宗師」之 IP 形象。
+                  官網將全面塑造創辦人陳茂鴻 (Holmes) 作為「系統化科技品牌大師」之 IP 形象。
                   「鴻思論 (Holmes Theory)」將作為前台學術智庫，將過往之「典範轉移、主權歸位、價值運算」等理論集結，奠定智策慧在亞太區品牌數位轉型的領袖地位。
                 </p>
               </div>
@@ -114,7 +114,7 @@ export default function PlanPage() {
                 <div className="lg:col-span-1 p-6 rounded-xl border border-slate-900 bg-slate-900/20 space-y-6">
                   <div>
                     <h3 className="font-bold text-base text-orange-400 flex items-center gap-2">
-                      <Award size={18} /> 導入師資質模擬器
+                      <Award size={18} /> 導入師資質審查模擬器
                     </h3>
                     <p className="text-[11px] text-slate-500 mt-1">模擬智策慧對經銷夥伴推薦之導入師進行的門檻審查系統。</p>
                   </div>
@@ -141,7 +141,7 @@ export default function PlanPage() {
                         className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
                       />
                       <label htmlFor="master" className="text-slate-400 cursor-pointer select-none">
-                        2. 具備行銷/大眾傳播相關碩士學位
+                        2. 具備品牌行銷相關碩士學位
                       </label>
                     </div>
 
@@ -161,7 +161,7 @@ export default function PlanPage() {
                 {/* 後台經銷分潤與時間明細 */}
                 <div className="lg:col-span-2 p-6 rounded-xl border border-slate-900 bg-slate-900/10 space-y-4 text-xs">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                    <h3 className="font-bold text-base text-white">/admin/distributors (經銷渠道與分潤看板)</h3>
+                    <h3 className="font-bold text-base text-white">/admin/distributors (經銷與培訓管理面版)</h3>
                     <span className="text-[10px] font-mono text-slate-500">SHARED LEDGER</span>
                   </div>
 
@@ -173,7 +173,7 @@ export default function PlanPage() {
                           <th className="py-2">關係角色</th>
                           <th className="py-2">認證狀態</th>
                           <th className="py-2 text-right">經銷儲值金</th>
-                          <th className="py-2 text-right">預設分潤比例</th>
+                          <th className="py-2 text-right">分潤比例</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-900">
@@ -186,7 +186,7 @@ export default function PlanPage() {
                         </tr>
                         <tr>
                           <td className="py-3 text-white">導入師王小明</td>
-                          <td>個人導入師</td>
+                          <td>認證導入師</td>
                           <td className={isCertified ? 'text-orange-400 font-bold' : 'text-slate-600'}>
                             {isCertified ? 'SWEM Certified' : 'Pending'}
                           </td>
@@ -225,7 +225,7 @@ export default function PlanPage() {
 
                   <div className="space-y-4 text-xs">
                     <div className="space-y-1.5">
-                      <label className="text-slate-400 font-bold block">1. 專案合約總額： ${revenue.toLocaleString()}</label>
+                      <label className="text-slate-400 font-bold block">1. 大專案合約總金額： ${revenue.toLocaleString()}</label>
                       <input 
                         type="range" 
                         min="200000" 
@@ -269,7 +269,7 @@ export default function PlanPage() {
                 {/* 軌道 B 運營實體看板 */}
                 <div className="lg:col-span-2 p-6 rounded-xl border border-slate-900 bg-slate-900/10 space-y-6 text-xs text-left">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                    <h3 className="font-bold text-base text-white">/admin/projects (大專案控制系統 ── 財務與獎金結算面版)</h3>
+                    <h3 className="font-bold text-base text-white">/admin/projects (大專案時程與預算/利潤/PM獎金控制系統)</h3>
                     <span className="text-[10px] font-mono text-orange-500">PM OS MODULE</span>
                   </div>
 
@@ -294,12 +294,12 @@ export default function PlanPage() {
                   <div className="bg-slate-950 p-4 rounded-lg border border-slate-900 space-y-2">
                     <div className="font-bold text-white flex items-center gap-1.5">
                       <ShieldAlert size={14} className="text-orange-500" />
-                      大專案控制規則說明
+                      大專案控制系統與 PM 獎金設計規則
                     </div>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      大專案管理系統獨立於經銷管理，專為客製化大型顧問案設計。系統設定「目標毛利率 50%」：
-                      實際毛利率高於 50% 時，PM 與顧問團隊享受 5% 的淨利分成；低於 50% 且高於 40% 時為 3%；
-                      低於 40% 則扣除獎金，藉此倒逼專案經理在 Timesheet 與里程碑時程上進行精準控制。
+                      本系統並非經銷體系管理項目，而是另外的工作管理，專門用來執行大型品牌顧問大專案。
+                      核心目的在於精準控制資源（投入人天）、掌控時程里程碑、結算毛利，並依毛利率自動算出 PM 的績效獎金。
+                      目標毛利率設為 50%：毛利率 $\ge$ 50% 撥付 5% 淨利作為獎金；40% ──➔ 49% 撥付 3%；低於 40% 則不撥付。
                     </p>
                   </div>
                 </div>
@@ -315,14 +315,14 @@ export default function PlanPage() {
                 <div className="p-6 rounded-xl border border-slate-900 bg-slate-900/10 space-y-3">
                   <h3 className="font-bold text-base text-orange-400">未來官網完整資料夾與頁面架構規劃</h3>
                   <ul className="space-y-2 text-slate-400">
-                    <li>• <span className="font-mono text-slate-300">/</span> —— 簡報式首頁 (整合最新公告與鴻思論)</li>
-                    <li>• <span className="font-mono text-slate-300">/about</span> —— 關於我們 (團隊背景與資質認證架構師)</li>
-                    <li>• <span className="font-mono text-slate-300">/services/brandbase</span> —— brandbase™ 中小企業品牌建置計畫</li>
-                    <li>• <span className="font-mono text-slate-300">/services/patronOS</span> —— 六脈診斷 PatronOS 客戶查看專區 (憑密碼)</li>
-                    <li>• <span className="font-mono text-slate-300">/cases</span> —— 客戶實績 (整合可搜尋下拉選單篩選)</li>
-                    <li>• <span className="font-mono text-slate-300">/insights</span> —— 鴻思論文章智庫 (文章上架分流至首頁)</li>
-                    <li>• <span className="font-mono text-slate-300">/consultant</span> —— 顧問與架構師登錄檔</li>
-                    <li>• <span className="font-mono text-slate-300">/contact</span> —— 線上預約自測 (整合 5 題 brandbase 自測問卷)</li>
+                    <li>• <span className="font-mono text-slate-300">/</span> ──➔ 簡報式首頁 (動態載入最新消息與鴻思論)</li>
+                    <li>• <span className="font-mono text-slate-300">/about</span> ──➔ 關於我們 (團隊背景與認證架構師)</li>
+                    <li>• <span className="font-mono text-slate-300">/services/brandbase</span> ──➔ brandbase™ 中小企業品牌建置計畫</li>
+                    <li>• <span className="font-mono text-slate-300">/services/patronOS</span> ──➔ 六脈診斷 PatronOS 客戶查看專區 (憑密碼)</li>
+                    <li>• <span className="font-mono text-slate-300">/cases</span> ──➔ 客戶實績 (整合可搜尋下拉選單篩選)</li>
+                    <li>• <span className="font-mono text-slate-300">/insights</span> ──➔ 鴻思論文章智庫 (文章上架分流至首頁)</li>
+                    <li>• <span className="font-mono text-slate-300">/consultant</span> ──➔ 顧問與架構師登錄檔</li>
+                    <li>• <span className="font-mono text-slate-300">/contact</span> ──➔ 線上預約自測 (整合 5 題 brandbase 自測問卷)</li>
                   </ul>
                 </div>
 
@@ -464,5 +464,24 @@ function VisionCard({ title, desc }: { title: string, desc: string }) {
       </h3>
       <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
     </div>
+  );
+}
+
+function ChevronRight({ size, className }: { size: number, className?: string }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className}
+    >
+      <path d="m9 18 6-6-6-6"/>
+    </svg>
   );
 }
