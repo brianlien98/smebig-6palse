@@ -5,7 +5,7 @@ import {
   ChevronUp, ChevronDown, ArrowRight, CircleDollarSign, Users, 
   MousePointerClick, Gem, Repeat, MessageSquare, Award, Sparkles, 
   Building2, ArrowUpRight, CheckCircle2, ShieldCheck, Calendar,
-  HelpCircle, BookOpen, Briefcase, MapPin, TrendingUp
+  HelpCircle, BookOpen, Briefcase, MapPin, TrendingUp, Activity, Terminal
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -34,7 +34,7 @@ export default function HomePage() {
   ];
 
   const slides: Slide[] = [
-    { id: 0, badge: "BRAND GRANDMASTER", title: "Guru of Systematic Tech Branding", subtitle: "陳茂鴻 Holmes ── 系統化建構隨商務演進動態調整的品牌與營運系統" },
+    { id: 0, badge: "BRAND GRANDMASTER GURU", title: "Guru of Systematic Tech Branding", subtitle: "陳茂鴻 Holmes ── 台灣行銷科技與品牌轉型的靈魂人物" },
     { id: 1, badge: "LATEST NEWS & INSIGHTS", title: "最新消息與精選鴻思論", subtitle: "即時掌握宗師觀點與最新品牌數位轉型動態" },
     { id: 2, badge: "METHODOLOGY", title: "品牌六脈診斷模組", subtitle: "打破黑箱！以數據流向動態解構企業健康度 (PatronOS™)" },
     { id: 3, badge: "SME PLATFORM", title: "brandbase 智商戰平台", subtitle: "中小企業品牌成長加速器：資源、工具、AI 代理一次備齊" },
@@ -83,7 +83,7 @@ export default function HomePage() {
   return (
     <div className="relative w-full h-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
       
-      {/* 頂部全域導覽列 (活力橘點綴) */}
+      {/* 頂部全域導覽列 */}
       <header className="fixed top-0 left-0 w-full z-40 px-8 h-20 flex justify-between items-center bg-gradient-to-b from-slate-950/90 to-transparent backdrop-blur-sm print:hidden">
         <div className="flex items-center gap-3">
           <div className="bg-orange-500 text-white w-9 h-9 rounded-lg flex items-center justify-center font-bold text-lg shadow-lg shadow-orange-500/20">S</div>
@@ -110,7 +110,7 @@ export default function HomePage() {
         <span className="text-sm">{(slides.length).toString().padStart(2, '0')}</span>
       </div>
 
-      {/* 右側：簡報導航點 (橘色激活) */}
+      {/* 右側：簡報導航點 */}
       <div className="fixed right-8 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 print:hidden">
         {slides.map((slide) => (
           <button
@@ -151,53 +151,106 @@ export default function HomePage() {
         className="w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth"
         style={{ scrollbarWidth: 'none' }}
       >
-        {/* Slide 1: Brand Grandmaster (陳茂鴻 Holmes IP 塑造) */}
+        {/* Slide 1: 品牌宗師 IP 塑造 (Holmes Chen 實力全展現) */}
         <section 
           id="slide-0"
           data-slide-id="0"
-          className="w-full h-screen snap-start flex flex-col justify-center items-center relative px-6 md:px-24 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950"
+          className="w-full h-screen snap-start flex flex-col justify-center items-center relative px-6 md:px-16 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950"
         >
-          <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
-            <div className="md:col-span-7 space-y-6 text-left">
-              <span className="px-4 py-1.5 rounded-full text-xs font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20 tracking-widest uppercase">
-                {slides[0].badge}
-              </span>
-              <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white leading-tight">
-                Guru of Systematic <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-500 to-orange-500">
-                  Tech Branding
+          <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pt-10">
+            {/* 左側：極具張力之宗師實力背景說明 */}
+            <div className="lg:col-span-7 space-y-5 text-left">
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 text-xs font-mono font-bold tracking-wider">
+                  {slides[0].badge}
                 </span>
-              </h1>
-              <p className="text-base text-slate-400 leading-relaxed">
-                創辦人陳茂鴻（Holmes）將二十年品牌實戰經驗，提煉為「主顧客品牌作業系統 —— 六脈十八掌（PatronOS™）」，協助中小企業排除資訊斷點，將經營流程轉化為複利的系統資產。
+                <span className="text-slate-500 text-xs font-mono">GURU CHIEF CONSULTANT</span>
+              </div>
+              
+              <div className="space-y-1">
+                <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white leading-tight">
+                  Guru of Systematic <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-500 to-orange-500">
+                    Tech Branding ── 陳茂鴻
+                  </span>
+                </h1>
+                <p className="text-xs text-orange-400 font-bold tracking-widest font-mono">
+                  工學 x 商學 x 傳播跨界大師 / 全台首份 MarTech 行銷科技版圖製作人 / 國家品牌計畫資深顧問
+                </p>
+              </div>
+
+              <p className="text-xs md:text-sm text-slate-400 leading-relaxed">
+                陳茂鴻 (Holmes Chen) 執行長是台灣將「品牌策略」與「行銷科技 (MarTech)」完美系統化整合的先驅靈魂人物。他歷經資訊科技（逢甲資工）與品牌行銷（政大 MBA）跨界洗禮，現任智策慧品牌顧問公司執行長、AMT 亞太行銷數位轉型聯盟協會智識長。他將虛無飄渺的品牌公關，落地成用大數據、AI 系統化管理的「企業獲利作業系統」。
               </p>
-              <div className="pt-4 flex flex-col sm:flex-row gap-4">
+
+              {/* 三大核心貢獻 (極高資訊密度網格) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-[11px] text-slate-400">
+                <div className="p-3 bg-slate-950/80 border border-slate-900 rounded-lg space-y-1">
+                  <div className="font-bold text-white flex items-center gap-1"><Activity size={12} className="text-orange-500" /> 1. 全台首創 PatronOS™</div>
+                  <p className="text-[10px] leading-relaxed">以「六脈十八掌」融合 AI 決策大腦，讓品牌經營走向可控速增長。</p>
+                </div>
+                <div className="p-3 bg-slate-950/80 border border-slate-900 rounded-lg space-y-1">
+                  <div className="font-bold text-white flex items-center gap-1"><Terminal size={12} className="text-orange-500" /> 2. 發布行銷科技版圖</div>
+                  <p className="text-[10px] leading-relaxed">主導發布台灣第一份 MarTech 地圖，成為企業進行數位轉型指引羅盤。</p>
+                </div>
+                <div className="p-3 bg-slate-950/80 border border-slate-900 rounded-lg space-y-1">
+                  <div className="font-bold text-white flex items-center gap-1"><ShieldCheck size={12} className="text-orange-500" /> 3. 奪回企業「數位主權」</div>
+                  <p className="text-[10px] leading-relaxed">積極協助中小企業與企二代轉型，以數位工具建立可持續成長品牌資產。</p>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-4">
                 <button 
-                  onClick={() => scrollToSlide(1)}
-                  className="px-6 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg transition flex items-center justify-center gap-2"
+                  onClick={() => scrollToSlide(2)}
+                  className="px-6 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-xs tracking-wider transition shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 animate-pulse"
                 >
-                  解讀鴻思論 ──➔
+                  與宗師 1-on-1 深度對談 ──➔
                 </button>
                 <button 
-                  onClick={() => scrollToSlide(7)}
-                  className="px-6 py-3.5 bg-slate-900 text-slate-300 font-bold rounded-lg border border-slate-800 hover:bg-slate-800 transition"
+                  onClick={() => scrollToSlide(1)}
+                  className="px-6 py-3.5 bg-slate-900 text-slate-300 font-bold rounded-lg text-xs border border-slate-850 hover:bg-slate-800 transition"
                 >
-                  顧問師與導入師培訓
+                  閱讀鴻思論著作 (Holmes Theory)
                 </button>
               </div>
             </div>
-            {/* 宗師肖像模擬佔位區 */}
-            <div className="md:col-span-5 flex justify-center">
-              <div className="relative w-72 h-96 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 flex flex-col justify-end overflow-hidden group hover:border-orange-500/30 transition-all duration-500">
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent z-10" />
-                <div className="absolute top-4 left-4 z-20 bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-0.5 rounded text-[10px] font-mono">
-                  CHAIRMAN HOLMES
+
+            {/* 右側：純 CSS/SVG 繪製之極具衝擊力「品牌大腦戰情數據矩陣 (PatronOS Matrix)」 */}
+            <div className="lg:col-span-5 flex justify-center">
+              <div className="relative w-80 h-96 rounded-2xl border border-slate-800 bg-[#0c0f16] p-6 flex flex-col justify-between overflow-hidden group hover:border-orange-500/40 transition-all duration-500">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_70%)]" />
+                
+                {/* 數據雷達掃描與脈衝同心圓 */}
+                <div className="w-full h-44 flex items-center justify-center relative">
+                  <div className="absolute w-36 h-34 rounded-full border border-dashed border-orange-500/20 animate-ping duration-1000" />
+                  <div className="absolute w-28 h-28 rounded-full border border-orange-500/10 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full border border-orange-500/25 flex items-center justify-center">
+                      <div className="w-6 h-6 rounded-full bg-orange-500 animate-pulse shadow-xl shadow-orange-500/50" />
+                    </div>
+                  </div>
+                  {/* 動態雷達掃描線 */}
+                  <div className="absolute w-40 h-[1px] bg-gradient-to-r from-transparent to-orange-500/40 rotate-45 transform origin-center animate-spin duration-[4000ms]" />
                 </div>
-                {/* 裝飾線 */}
-                <div className="absolute inset-0 border border-slate-800/50 m-2 rounded-xl pointer-events-none z-0" />
-                <div className="z-20 space-y-1">
-                  <h3 className="text-lg font-bold text-white">陳茂鴻 Holmes</h3>
-                  <p className="text-xs text-orange-400 font-mono">SWEM 首席顧問師 / 共同創辦人</p>
+
+                {/* 模擬常態分配圖與數據分析 */}
+                <div className="z-10 space-y-3">
+                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-500 border-b border-slate-900 pb-2">
+                    <span>SYSTEM CORE STATUS</span>
+                    <span className="text-orange-400 animate-pulse font-bold">● ACTIVE</span>
+                  </div>
+                  <div className="space-y-1.5 text-left font-mono">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">PATRON SCORE:</span>
+                      <span className="text-white font-bold">98.4 (PR99)</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">DECISION ENGINE:</span>
+                      <span className="text-orange-400 font-bold">AGENTIC AI v1.5</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-500 text-left leading-relaxed">
+                    精準整合企業內部交易(TX)與網站流量(GA)數據，解構六脈18個接觸點。
+                  </p>
                 </div>
               </div>
             </div>
