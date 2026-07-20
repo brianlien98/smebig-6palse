@@ -5,7 +5,7 @@ import {
   ChevronUp, ChevronDown, ArrowRight, CircleDollarSign, Users, 
   MousePointerClick, Gem, Repeat, MessageSquare, Award, Sparkles, 
   Building2, ArrowUpRight, CheckCircle2, ShieldCheck, Calendar,
-  HelpCircle, BookOpen, Briefcase, MapPin, TrendingUp, Activity, Terminal
+  Briefcase, MapPin, Activity, Terminal, BookOpen
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -37,7 +37,7 @@ export default function HomePage() {
     { id: 0, badge: "BRAND GRANDMASTER GURU", title: "Guru of Systematic Tech Branding", subtitle: "陳茂鴻 Holmes ── 台灣行銷科技與品牌轉型的靈魂人物" },
     { id: 1, badge: "LATEST NEWS & INSIGHTS", title: "最新消息與精選鴻思論", subtitle: "即時掌握宗師觀點與最新品牌數位轉型動態" },
     { id: 2, badge: "METHODOLOGY", title: "品牌六脈診斷模組", subtitle: "打破黑箱！以數據流向動態解構企業健康度 (PatronOS™)" },
-    { id: 3, badge: "SME PLATFORM", title: "brandbase 智商戰平台", subtitle: "中小企業品牌成長加速器：資源、工具、AI 代理一次備齊" },
+    { id: 3, badge: "SME PLATFORM", title: "brandbase 智商戰平台", subtitle: "中小企業 brandbase 品牌成長加速器：資源、工具、AI 代理一次備齊" },
     { id: 4, badge: "CONSULTING SERVICES", title: "智策服務行業項目", subtitle: "代工轉品牌、全通路整合、地方與國家品牌生態系建構" },
     { id: 5, badge: "SUCCESSFUL CASES", title: "服務案例與實績紀錄", subtitle: "深耕控制閥、母嬰、餐飲與地方特色產業，以數據實證品牌成長" },
     { id: 6, badge: "VENUE RENTAL", title: "共享場域預約系統", subtitle: "實體空間與活動場地線上行事曆即時預約與審核控制" },
@@ -151,7 +151,7 @@ export default function HomePage() {
         className="w-full h-full overflow-y-auto snap-y snap-mandatory scroll-smooth"
         style={{ scrollbarWidth: 'none' }}
       >
-        {/* Slide 1: 品牌宗師 IP 塑造 (Holmes Chen 實力全展現) */}
+        {/* Slide 1: Brand Grandmaster (陳茂鴻 Holmes IP 雙向整合重構) */}
         <section 
           id="slide-0"
           data-slide-id="0"
@@ -194,17 +194,17 @@ export default function HomePage() {
                   <p className="text-[10px] leading-relaxed">主導發布台灣第一份 MarTech 地圖，成為企業進行數位轉型指引羅盤。</p>
                 </div>
                 <div className="p-3 bg-slate-950/80 border border-slate-900 rounded-lg space-y-1">
-                  <div className="font-bold text-white flex items-center gap-1"><ShieldCheck size={12} className="text-orange-500" /> 3. 奪回企業「數位主權」</div>
-                  <p className="text-[10px] leading-relaxed">積極協助中小企業與企二代轉型，以數位工具建立可持續成長品牌資產。</p>
+                  <div className="font-bold text-white flex items-center gap-1"><ShieldCheck size={12} className="text-orange-500" /> 3. 數位主權與品牌資產</div>
+                  <p className="text-[10px] leading-relaxed">協助企業與企二代轉型，以數位工具及數據建立可持續成長品牌系統資產。</p>
                 </div>
               </div>
 
               <div className="pt-2 flex flex-col sm:flex-row gap-4">
                 <button 
                   onClick={() => scrollToSlide(2)}
-                  className="px-6 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-xs tracking-wider transition shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 animate-pulse"
+                  className="px-6 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-xs tracking-wider transition shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 group animate-pulse"
                 >
-                  與宗師 1-on-1 深度對談 ──➔
+                  與宗師 1-on-1 深度對談 <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                 </button>
                 <button 
                   onClick={() => scrollToSlide(1)}
@@ -215,42 +215,45 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 右側：純 CSS/SVG 繪製之極具衝擊力「品牌大腦戰情數據矩陣 (PatronOS Matrix)」 */}
+            {/* 右側：宗師實體照片為底 + 右上角 HUD 浮空橘色雷達與同心圓動態 */}
             <div className="lg:col-span-5 flex justify-center">
-              <div className="relative w-80 h-96 rounded-2xl border border-slate-800 bg-[#0c0f16] p-6 flex flex-col justify-between overflow-hidden group hover:border-orange-500/40 transition-all duration-500">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_70%)]" />
+              <div className="relative w-80 h-[420px] rounded-2xl border border-slate-800 bg-[#0C0F16] overflow-hidden group hover:border-orange-500/40 transition-all duration-500 shadow-2xl shadow-orange-500/10">
                 
-                {/* 數據雷達掃描與脈衝同心圓 */}
-                <div className="w-full h-44 flex items-center justify-center relative">
-                  <div className="absolute w-36 h-34 rounded-full border border-dashed border-orange-500/20 animate-ping duration-1000" />
-                  <div className="absolute w-28 h-28 rounded-full border border-orange-500/10 flex items-center justify-center">
-                    <div className="w-16 h-16 rounded-full border border-orange-500/25 flex items-center justify-center">
-                      <div className="w-6 h-6 rounded-full bg-orange-500 animate-pulse shadow-xl shadow-orange-500/50" />
+                {/* 宗師實體照片背景 (100% 寫實比例與不透明度縮放) */}
+                <div 
+                  className="absolute inset-0 bg-cover bg-center opacity-85 group-hover:scale-105 transition-transform duration-700 pointer-events-none" 
+                  style={{ backgroundImage: `url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSG280gftVARUTY-Ce59UySp23jJDuuItjqKFN7iIASgHuuZtncfiqpk2c&s=10')` }}
+                />
+
+                {/* 漸層保護盾 (防範強光，完美收納入 Labsology 暗黑科技風) */}
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent z-10" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(249,115,22,0.15)_0%,transparent_60%)] z-10" />
+
+                {/* 右上角：浮空橘色雷達、脈衝同心圓與動態掃描線 (HUD Overlap) */}
+                <div className="absolute top-4 right-4 w-24 h-24 z-20 pointer-events-none opacity-90">
+                  <div className="absolute inset-0 rounded-full border border-orange-500/25 animate-ping duration-1000" />
+                  <div className="absolute inset-2 rounded-full border border-orange-500/15 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full border border-orange-500/30 flex items-center justify-center">
+                      <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse shadow-lg shadow-orange-500/50" />
                     </div>
                   </div>
                   {/* 動態雷達掃描線 */}
-                  <div className="absolute w-40 h-[1px] bg-gradient-to-r from-transparent to-orange-500/40 rotate-45 transform origin-center animate-spin duration-[4000ms]" />
+                  <div className="absolute top-1/2 left-1/2 w-12 h-[1px] bg-gradient-to-r from-transparent to-orange-500/40 rotate-45 transform origin-left -translate-y-1/2 animate-spin duration-[3000ms]" />
                 </div>
 
-                {/* 模擬常態分配圖與數據分析 */}
-                <div className="z-10 space-y-3">
-                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-500 border-b border-slate-900 pb-2">
-                    <span>SYSTEM CORE STATUS</span>
-                    <span className="text-orange-400 animate-pulse font-bold">● ACTIVE</span>
+                {/* 左上角：系統資訊代碼 */}
+                <div className="absolute top-4 left-4 z-20 bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-0.5 rounded text-[9px] font-mono tracking-wider">
+                  SYS_BRAIN_ONLINE
+                </div>
+
+                {/* 底部：宗師尊稱與標牌 (Labsology Grid Alignment) */}
+                <div className="absolute bottom-6 left-6 right-6 z-20 text-left space-y-1">
+                  <div className="flex justify-between items-center border-b border-slate-800/80 pb-1.5 mb-1">
+                    <span className="text-[10px] font-mono text-slate-400 tracking-wider">PATRONOS™ GURU CORE</span>
+                    <span className="text-[10px] font-mono text-orange-400 font-bold animate-pulse">● SWEM</span>
                   </div>
-                  <div className="space-y-1.5 text-left font-mono">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400">PATRON SCORE:</span>
-                      <span className="text-white font-bold">98.4 (PR99)</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400">DECISION ENGINE:</span>
-                      <span className="text-orange-400 font-bold">AGENTIC AI v1.5</span>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-500 text-left leading-relaxed">
-                    精準整合企業內部交易(TX)與網站流量(GA)數據，解構六脈18個接觸點。
-                  </p>
+                  <h3 className="text-xl font-bold text-white tracking-tight">陳茂鴻 Holmes</h3>
+                  <p className="text-xs text-orange-400/90 font-mono">Guru of Systematic Tech Branding</p>
                 </div>
               </div>
             </div>
@@ -448,7 +451,7 @@ export default function HomePage() {
               <CaseCard 
                 title="台東好物集體品牌" 
                 industry="政府與地方特產" 
-                desc="建立認證標章，群體合作打品牌。推動通路、社群與會展整合行銷，創造破億銷售績效。" 
+                desc="建立認認標章，群體合作打品牌。推動通路、社群與會展整合行銷，創造破億銷售績效。" 
               />
             </div>
           </div>
